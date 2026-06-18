@@ -3,17 +3,17 @@ from dataclasses import dataclass
 
 import chromadb
 from rank_bm25 import BM25Okapi
-from FlagEmbedding import FlagReranker
+from sentence_transformers import CrossEncoder
 
 from rag.ingest import Chunk
 
-_reranker: FlagReranker | None = None
+_reranker: CrossEncoder | None = None
 
 
-def _get_reranker() -> FlagReranker:
+def _get_reranker() -> CrossEncoder:
     global _reranker
     if _reranker is None:
-        _reranker = FlagReranker("BAAI/bge-reranker-v2-m3", use_fp16=True)
+        _reranker = CrossEncoder("BAAI/bge-reranker-v2-m3")
     return _reranker
 
 
@@ -71,7 +71,7 @@ def rerank(query: str, results: list[RetrievalResult], top_k: int = 5) -> list[R
     if not results:
         return []
     pairs = [[query, r.text] for r in results]
-    scores = _get_reranker().compute_score(pairs, normalize=True)
+    scores = _get_reranker().predict(pairs)
     if isinstance(scores, float):
         scores = [scores]
     ranked = sorted(zip(scores, results), key=lambda x: x[0], reverse=True)[:top_k]

@@ -9,7 +9,7 @@ from rag.retrieve import RetrievalResult
 
 
 def generate_testset(
-    docs: list[str],
+    docs,
     n: int = 100,
     llm_model: str = "gpt-4o-mini",
 ) -> list[dict]:
@@ -30,7 +30,7 @@ def generate_testset(
     gen_llm = ChatOpenAI(model=llm_model)
     critic_llm = ChatOpenAI(model=llm_model)
     generator = TestsetGenerator.from_langchain(gen_llm, critic_llm, OpenAIEmbeddings())
-    langchain_docs = [Document(page_content=d) for d in docs]
+    langchain_docs = [Document(page_content=d.text if hasattr(d, "text") else d) for d in docs]
     testset = generator.generate_with_langchain_docs(
         langchain_docs, test_size=n,
         distributions={simple: 0.4, reasoning: 0.3, multi_context: 0.3},
@@ -40,14 +40,14 @@ def generate_testset(
 
 def run_ragas_eval(
     testset: list[dict],
-    retrieve_fn: Callable[[str, int], list[RetrievalResult]],
+    retrieve_fn: Callable[[str], list[RetrievalResult]],
     generate_fn: Callable,
     k: int = 5,
 ) -> dict[str, float]:
     questions, answers, contexts, ground_truths = [], [], [], []
     for sample in testset:
         q = sample["question"]
-        results = retrieve_fn(q, k)
+        results = retrieve_fn(q)
         ans = generate_fn(q, results)
         questions.append(q)
         answers.append(ans.answer if hasattr(ans, "answer") else str(ans))
