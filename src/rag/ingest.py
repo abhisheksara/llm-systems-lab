@@ -45,16 +45,16 @@ def chunk_document(text: str, metadata: dict, max_tokens: int = 512) -> list[Chu
             if buf:
                 _flush(buf, metadata, chunks)
                 buf, buf_tokens = [], 0
-            words, sub, sub_t = sent.split(), [], 0
+            words, sub = sent.split(), []
             for w in words:
-                wt = len(enc.encode(w))
-                if sub_t + wt > max_tokens and sub:
-                    _flush(sub, metadata, chunks); sub, sub_t = [], 0
-                sub.append(w); sub_t += wt
+                candidate = " ".join(sub + [w])
+                if len(enc.encode(candidate)) > max_tokens and sub:
+                    _flush(sub, metadata, chunks); sub = []
+                sub.append(w)
             if sub:
                 _flush(sub, metadata, chunks)
             continue
-        if buf_tokens + st > max_tokens and buf:
+        if len(enc.encode(" ".join(buf + [sent]))) > max_tokens and buf:
             _flush(buf, metadata, chunks); buf, buf_tokens = [], 0
         buf.append(sent); buf_tokens += st
 
