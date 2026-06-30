@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chunking Strategies — RAG Systems</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400&family=JetBrains+Mono:wght@300;400;500&family=Libre+Baskerville:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:           #080705;
+    --bg-card:      #0f0e0b;
+    --bg-hover:     #161410;
+    --accent:       #c97d0a;
+    --accent-bright:#f0a030;
+    --accent-dim:   #6b4205;
+    --accent-glow:  rgba(201,125,10,0.15);
+    --text-primary: #ede8df;
+    --text-sec:     #8a8480;
+    --text-muted:   #4a4540;
+    --border:       #1e1c18;
+    --border-light: #2a2820;
+    --chunk-1:      #1a4a6e;
+    --chunk-2:      #1a5a38;
+    --chunk-3:      #5a1a50;
+    --chunk-overlap:#7a5a10;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: 'Libre Baskerville', Georgia, serif;
+    font-size: 17px;
+    line-height: 1.75;
+    overflow-x: hidden;
+  }
+
+  /* ── NOISE TEXTURE OVERLAY ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.6;
+  }
+
+  /* ── TYPOGRAPHY ── */
+  h1, h2, h3 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 300; letter-spacing: -0.02em; }
+  code, .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ── HERO ── */
+  .hero {
+    min-height: 100vh;
+    display: grid;
+    grid-template-rows: 1fr auto;
+    padding: 0 clamp(2rem, 6vw, 7rem);
+    position: relative;
+    overflow: hidden;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .hero-bg-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(10rem, 25vw, 28rem);
+    font-weight: 700;
+    color: transparent;
+    -webkit-text-stroke: 1px var(--border-light);
+    white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
+    letter-spacing: -0.05em;
+    opacity: 0.5;
+  }
+
+  .hero-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding-bottom: 5rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .hero-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 1.5rem;
+    opacity: 0;
+    animation: fadeUp 0.8s 0.3s forwards;
+  }
+
+  .hero h1 {
+    font-size: clamp(3rem, 8vw, 8rem);
+    line-height: 1.0;
+    font-weight: 300;
+    color: var(--text-primary);
+    opacity: 0;
+    animation: fadeUp 0.8s 0.5s forwards;
+  }
+
+  .hero h1 em {
+    font-style: italic;
+    color: var(--accent-bright);
+  }
+
+  .hero-subtitle {
+    margin-top: 2rem;
+    max-width: 520px;
+    color: var(--text-sec);
+    font-size: 0.95rem;
+    line-height: 1.8;
+    opacity: 0;
+    animation: fadeUp 0.8s 0.7s forwards;
+  }
+
+  .hero-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem 0;
+    border-top: 1px solid var(--border);
+    position: relative;
+    z-index: 1;
+  }
+
+  .hero-bottom-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .scroll-hint {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    animation: pulse 2s infinite;
+  }
+
+  .scroll-hint::before {
+    content: '';
+    width: 1px;
+    height: 40px;
+    background: linear-gradient(to bottom, var(--accent), transparent);
+    animation: grow 2s infinite;
+  }
+
+  /* ── NAV INDEX ── */
+  .index-nav {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .index-nav a {
+    display: block;
+    padding: clamp(1.5rem, 3vw, 2.5rem) clamp(2rem, 6vw, 7rem);
+    text-decoration: none;
+    border-right: 1px solid var(--border);
+    transition: background 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .index-nav a:last-child { border-right: none; }
+
+  .index-nav a::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0;
+    width: 0; height: 2px;
+    background: var(--accent);
+    transition: width 0.4s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  .index-nav a:hover { background: var(--bg-hover); }
+  .index-nav a:hover::after { width: 100%; }
+
+  .index-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--accent);
+    letter-spacing: 0.15em;
+    margin-bottom: 0.5rem;
+  }
+
+  .index-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  /* ── STRATEGY SECTIONS ── */
+  .strategy {
+    padding: clamp(4rem, 8vw, 8rem) clamp(2rem, 6vw, 7rem);
+    border-bottom: 1px solid var(--border);
+    position: relative;
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.8s ease, transform 0.8s ease;
+  }
+
+  .strategy.hidden { opacity: 0; transform: translateY(40px); }
+  .strategy.hidden.visible { opacity: 1; transform: translateY(0); }
+
+  .strategy-bg-num {
+    position: absolute;
+    top: -0.1em;
+    right: clamp(1rem, 4vw, 5rem);
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(10rem, 22vw, 24rem);
+    font-weight: 700;
+    color: transparent;
+    -webkit-text-stroke: 1px var(--border);
+    pointer-events: none;
+    user-select: none;
+    line-height: 1;
+    opacity: 0.6;
+  }
+
+  .strategy-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  @media (max-width: 900px) {
+    .strategy-grid { grid-template-columns: 1fr; gap: 2.5rem; }
+    .index-nav { grid-template-columns: 1fr; }
+    .index-nav a { border-right: none; border-bottom: 1px solid var(--border); }
+    .index-nav a:last-child { border-bottom: none; }
+  }
+
+  .strategy-header { margin-bottom: 2rem; }
+
+  .strategy-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .strategy-tag::before {
+    content: '';
+    width: 24px;
+    height: 1px;
+    background: var(--accent);
+  }
+
+  .strategy h2 {
+    font-size: clamp(2rem, 4vw, 3.5rem);
+    font-weight: 300;
+    color: var(--text-primary);
+    line-height: 1.1;
+  }
+
+  .strategy h2 span {
+    display: block;
+    font-style: italic;
+    color: var(--accent-bright);
+  }
+
+  .strategy-desc {
+    color: var(--text-sec);
+    font-size: 0.95rem;
+    line-height: 1.85;
+    margin-top: 1.25rem;
+  }
+
+  /* ── PROS / CONS ── */
+  .pros-cons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 1.75rem;
+  }
+
+  .pros, .cons {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 1.25rem;
+  }
+
+  .pros { border-top: 2px solid #2a6a40; }
+  .cons { border-top: 2px solid #6a2a2a; }
+
+  .pros-cons-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+  }
+
+  .pros .pros-cons-title { color: #4aaa70; }
+  .cons .pros-cons-title { color: #aa4a4a; }
+
+  .pros-cons ul {
+    list-style: none;
+    font-size: 0.8rem;
+    color: var(--text-sec);
+    line-height: 1.7;
+  }
+
+  .pros ul li::before { content: '+ '; color: #4aaa70; font-family: 'JetBrains Mono', monospace; }
+  .cons ul li::before { content: '− '; color: #aa4a4a; font-family: 'JetBrains Mono', monospace; }
+
+  /* ── WHEN TO USE ── */
+  .when-to-use {
+    margin-top: 1.5rem;
+    padding: 1.25rem;
+    background: var(--accent-glow);
+    border-left: 2px solid var(--accent);
+    font-size: 0.85rem;
+    color: var(--text-sec);
+    line-height: 1.7;
+  }
+
+  .when-to-use strong {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 0.4rem;
+  }
+
+  /* ── CODE BLOCK ── */
+  .code-block {
+    margin-top: 1.5rem;
+    background: #050403;
+    border: 1px solid var(--border);
+    overflow-x: auto;
+  }
+
+  .code-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-card);
+  }
+
+  .code-dots { display: flex; gap: 5px; }
+  .code-dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    opacity: 0.4;
+  }
+
+  .code-lang {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .code-block pre {
+    padding: 1.25rem 1rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    line-height: 1.7;
+    color: #c8c2b8;
+    white-space: pre;
+    overflow-x: auto;
+  }
+
+  .kw { color: #c97d0a; }
+  .fn { color: #7aabcc; }
+  .str { color: #7aaa7a; }
+  .num { color: #cc9a7a; }
+  .cm { color: #4a4540; font-style: italic; }
+  .cls { color: #ccaa7a; }
+
+  /* ══════════════════════════════
+     VISUALIZATION PANELS
+  ══════════════════════════════ */
+  .viz-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 1.5rem;
+    position: sticky;
+    top: 2rem;
+    align-self: start;
+  }
+
+  .viz-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .viz-title::before {
+    content: '';
+    width: 6px; height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: blink 1.5s infinite;
+  }
+
+  /* ─ FIXED SIZE VIZ ─ */
+  .fixed-text-demo {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    line-height: 1.5;
+    color: var(--text-sec);
+    margin-bottom: 1.5rem;
+    word-break: break-all;
+    letter-spacing: 0.05em;
+  }
+
+  .chunks-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .chunk-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .chunk-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    width: 55px;
+    flex-shrink: 0;
+  }
+
+  .chunk-bar {
+    height: 28px;
+    display: flex;
+    align-items: center;
+    padding: 0 0.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    border-radius: 2px;
+    overflow: hidden;
+    white-space: nowrap;
+    opacity: 1;
+    transform: scaleX(1);
+    transform-origin: left;
+    transition: transform 0.5s cubic-bezier(0.4,0,0.2,1), opacity 0.3s;
+  }
+
+  .chunk-bar.pre-animate { opacity: 0; transform: scaleX(0); }
+  .chunk-bar.pre-animate.animate { opacity: 1; transform: scaleX(1); }
+
+  .chunk-1 { background: var(--chunk-1); color: #7ab8e0; border: 1px solid #2a6a9a; }
+  .chunk-2 { background: var(--chunk-2); color: #7aaa8a; border: 1px solid #2a8a50; }
+  .chunk-3 { background: var(--chunk-3); color: #c07ab0; border: 1px solid #8a2a7a; }
+  .chunk-overlap-seg { background: var(--chunk-overlap); color: #d4aa60; border: 1px solid #8a6a10; margin-left: -6px; border-left: none; border-radius: 0 2px 2px 0; }
+
+  .overlap-legend {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--text-muted);
+  }
+
+  .overlap-box { width: 12px; height: 12px; background: var(--chunk-overlap); border-radius: 2px; flex-shrink: 0; }
+
+  /* ─ RECURSIVE VIZ ─ */
+  .recursive-demo { font-size: 0.8rem; }
+
+  .rec-level {
+    margin-bottom: 1rem;
+    opacity: 1;
+    transform: translateX(0);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+
+  .rec-level.pre-animate { opacity: 0; transform: translateX(-10px); }
+  .rec-level.pre-animate.visible { opacity: 1; transform: translateX(0); }
+
+  .rec-level-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.58rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 0.4rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .rec-level-label .sep-token {
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-size: 0.65rem;
+  }
+
+  .level-0 .rec-level-label { color: #7ab8e0; }
+  .level-0 .sep-token { background: #0d2a40; color: #7ab8e0; }
+  .level-1 .rec-level-label { color: #7aaa8a; }
+  .level-1 .sep-token { background: #0d2a1a; color: #7aaa8a; }
+  .level-2 .rec-level-label { color: #c07ab0; }
+  .level-2 .sep-token { background: #2a0d26; color: #c07ab0; }
+  .level-3 .rec-level-label { color: #d4aa60; }
+  .level-3 .sep-token { background: #2a1a05; color: #d4aa60; }
+
+  .rec-chunks { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+
+  .rec-chunk {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    padding: 3px 7px;
+    border-radius: 2px;
+    border: 1px solid;
+  }
+
+  .level-0 .rec-chunk { background: #081828; color: #7ab8e0; border-color: #1a4060; }
+  .level-1 .rec-chunk { background: #081808; color: #7aaa8a; border-color: #1a4030; }
+  .level-2 .rec-chunk { background: #180818; color: #c07ab0; border-color: #401860; }
+  .level-3 .rec-chunk { background: #181008; color: #d4aa60; border-color: #604010; }
+
+  .rec-arrow {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin: 0.4rem 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--text-muted);
+  }
+
+  .rec-arrow::after { content: '↓'; color: var(--accent-dim); }
+
+  /* ─ SEMANTIC VIZ ─ */
+  .semantic-demo { }
+
+  .sentence-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.4rem;
+    opacity: 1;
+    transition: opacity 0.4s ease;
+  }
+
+  .sentence-row.pre-animate { opacity: 0; }
+  .sentence-row.pre-animate.visible { opacity: 1; }
+
+  .sim-bar-wrap {
+    width: 50px;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .sim-bar {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(to right, #c97d0a, #f0a030);
+    width: var(--sim-w, 70%);
+    transition: width 1s ease;
+  }
+
+  .sentence-text {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--text-sec);
+    padding: 3px 6px;
+    border-radius: 2px;
+    border: 1px solid var(--border);
+    flex: 1;
+  }
+
+  .sentence-row.group-a .sentence-text { border-color: #1a4060; background: #081828; color: #7ab8e0; }
+  .sentence-row.group-b .sentence-text { border-color: #1a4030; background: #081808; color: #7aaa8a; }
+  .sentence-row.group-c .sentence-text { border-color: #401860; background: #180818; color: #c07ab0; }
+
+  .split-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.4rem 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--accent-dim);
+    opacity: 1;
+    transition: opacity 0.4s ease;
+  }
+
+  .split-indicator.pre-animate { opacity: 0; }
+  .split-indicator.pre-animate.visible { opacity: 1; }
+
+  .split-indicator::before,
+  .split-indicator::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--accent-dim);
+    border-top: 1px dashed var(--accent-dim);
+  }
+
+  .sim-score {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.55rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    width: 50px;
+    flex-shrink: 0;
+    text-align: right;
+  }
+
+  /* ── COMPARISON TABLE ── */
+  .comparison {
+    padding: clamp(4rem, 8vw, 8rem) clamp(2rem, 6vw, 7rem);
+    border-bottom: 1px solid var(--border);
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.8s ease, transform 0.8s ease;
+  }
+
+  .comparison.pre-animate { opacity: 0; transform: translateY(40px); }
+  .comparison.pre-animate.visible { opacity: 1; transform: translateY(0); }
+
+  .comparison h2 {
+    font-size: clamp(1.8rem, 3.5vw, 3rem);
+    font-weight: 300;
+    margin-bottom: 2.5rem;
+    color: var(--text-primary);
+  }
+
+  .comparison h2 em { font-style: italic; color: var(--accent-bright); }
+
+  .table-wrap { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+
+  thead th {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-card);
+  }
+
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:hover { background: var(--bg-hover); }
+
+  td {
+    padding: 0.9rem 1rem;
+    color: var(--text-sec);
+    vertical-align: middle;
+    line-height: 1.5;
+  }
+
+  td:first-child {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .badge {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.55rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+
+  .badge-low    { background: #0d2a0d; color: #6aaa6a; border: 1px solid #1a5a1a; }
+  .badge-med    { background: #2a1a0d; color: #aaaa6a; border: 1px solid #5a4a1a; }
+  .badge-high   { background: #2a0d0d; color: #aa6a6a; border: 1px solid #5a1a1a; }
+  .badge-simple { background: #0d1a2a; color: #6a8aaa; border: 1px solid #1a3a5a; }
+  .badge-medium { background: #1a1a0d; color: #aaaa80; border: 1px solid #3a3a1a; }
+  .badge-complex{ background: #1a0d2a; color: #8a6aaa; border: 1px solid #3a1a5a; }
+
+  /* ── FOOTER ── */
+  footer {
+    padding: 3rem clamp(2rem, 6vw, 7rem);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .footer-brand {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.2rem;
+    font-weight: 300;
+    color: var(--text-muted);
+  }
+
+  .footer-brand em { font-style: italic; color: var(--accent-dim); }
+
+  .footer-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* ── KEYFRAMES ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  @keyframes grow {
+    0%, 100% { height: 40px; }
+    50% { height: 24px; }
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+
+  @keyframes slideInLeft {
+    from { opacity: 0; transform: translateX(-20px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  /* Safety net: show hero content if animations are blocked */
+  @media (prefers-reduced-motion: reduce) {
+    .hero-label, .hero h1, .hero-subtitle { opacity: 1; transform: none; animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══ HERO ══ -->
+<section class="hero">
+  <div class="hero-bg-text">CHUNK</div>
+  <div class="hero-content">
+    <div class="hero-label">RAG Systems — Text Preprocessing</div>
+    <h1>The Art of<br><em>Chunking</em></h1>
+    <p class="hero-subtitle">
+      How you split your documents determines what your retrieval system can find.
+      Three dominant strategies, each with distinct trade-offs in quality, cost, and complexity.
+    </p>
+  </div>
+  <div class="hero-bottom">
+    <span class="hero-bottom-label">Three Strategies Examined</span>
+    <div class="scroll-hint">Scroll to explore</div>
+  </div>
+</section>
+
+<!-- ══ INDEX NAV ══ -->
+<nav class="index-nav">
+  <a href="#fixed">
+    <div class="index-num">01 ——</div>
+    <div class="index-title">Fixed-Size Chunking</div>
+  </a>
+  <a href="#recursive">
+    <div class="index-num">02 ——</div>
+    <div class="index-title">Recursive Text Splitting</div>
+  </a>
+  <a href="#semantic">
+    <div class="index-num">03 ——</div>
+    <div class="index-title">Semantic Chunking</div>
+  </a>
+</nav>
+
+
+<!-- ══════════════════════════════
+     STRATEGY 01 — FIXED SIZE
+══════════════════════════════ -->
+<section class="strategy" id="fixed">
+  <div class="strategy-bg-num">01</div>
+  <div class="strategy-grid">
+
+    <!-- LEFT: Content -->
+    <div>
+      <div class="strategy-header">
+        <div class="strategy-tag">Strategy 01</div>
+        <h2>Fixed-Size<br><span>Chunking</span></h2>
+        <p class="strategy-desc">
+          The simplest and most widely used strategy. Text is divided into chunks of a
+          predetermined size — measured in characters or tokens — with an optional
+          sliding <em>overlap</em> window to preserve context at boundaries.
+        </p>
+        <p class="strategy-desc">
+          A chunk size of 512–1024 tokens with 10–20% overlap is a common baseline.
+          The overlap ensures that information spanning a chunk boundary isn't lost
+          during retrieval.
+        </p>
+      </div>
+
+      <div class="pros-cons">
+        <div class="pros">
+          <div class="pros-cons-title">Strengths</div>
+          <ul>
+            <li>Trivial to implement</li>
+            <li>Predictable chunk count</li>
+            <li>Near-zero compute cost</li>
+            <li>Works for any modality</li>
+            <li>Easy to tune overlap</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <div class="pros-cons-title">Weaknesses</div>
+          <ul>
+            <li>Ignores semantic boundaries</li>
+            <li>Splits mid-sentence often</li>
+            <li>Overlap inflates index size</li>
+            <li>Uniform granularity mismatch</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="when-to-use">
+        <strong>When to use</strong>
+        Prototyping, homogeneous corpora (product catalogues, logs), or when latency and
+        cost dominate quality requirements. Establish as a baseline before investing in
+        smarter strategies.
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+          <span class="code-lang">Python</span>
+        </div>
+        <pre><span class="kw">def</span> <span class="fn">fixed_chunk</span>(text: <span class="cls">str</span>, size: <span class="cls">int</span> = <span class="num">512</span>, overlap: <span class="cls">int</span> = <span class="num">64</span>) -> <span class="cls">list</span>[<span class="cls">str</span>]:
+    chunks = []
+    start = <span class="num">0</span>
+    <span class="kw">while</span> start < <span class="fn">len</span>(text):
+        end = start + size
+        chunks.<span class="fn">append</span>(text[start:end])
+        start += size - overlap  <span class="cm"># slide window with overlap</span>
+    <span class="kw">return</span> chunks
+
+<span class="cm"># LangChain equivalent</span>
+<span class="kw">from</span> langchain.text_splitter <span class="kw">import</span> <span class="cls">CharacterTextSplitter</span>
+
+splitter = <span class="cls">CharacterTextSplitter</span>(
+    chunk_size=<span class="num">512</span>,
+    chunk_overlap=<span class="num">64</span>,
+    separator=<span class="str">""</span>,  <span class="cm"># no separator = pure fixed split</span>
+)
+chunks = splitter.<span class="fn">split_text</span>(document)</pre>
+      </div>
+    </div>
+
+    <!-- RIGHT: Visualization -->
+    <div>
+      <div class="viz-panel" id="viz-fixed">
+        <div class="viz-title">Live Visualization</div>
+
+        <div class="fixed-text-demo" id="fixed-text-display">
+          Loading text sample...
+        </div>
+
+        <div class="chunks-container">
+          <div class="chunk-row">
+            <span class="chunk-label mono" style="font-size:0.58rem; color: var(--text-muted);">chunk_1</span>
+            <div class="chunk-bar chunk-1" id="cb1" style="width:62%">tokens 0–511</div>
+            <div class="chunk-bar chunk-overlap-seg" id="cb1o" style="width:12%; transition-delay:0.1s">overlap</div>
+          </div>
+          <div class="chunk-row">
+            <span class="chunk-label mono" style="font-size:0.58rem; color: var(--text-muted);">chunk_2</span>
+            <div class="chunk-bar chunk-2" id="cb2" style="width:62%; transition-delay:0.2s">tokens 448–959</div>
+            <div class="chunk-bar chunk-overlap-seg" id="cb2o" style="width:12%; transition-delay:0.3s">overlap</div>
+          </div>
+          <div class="chunk-row">
+            <span class="chunk-label mono" style="font-size:0.58rem; color: var(--text-muted);">chunk_3</span>
+            <div class="chunk-bar chunk-3" id="cb3" style="width:62%; transition-delay:0.4s">tokens 896–end</div>
+          </div>
+        </div>
+
+        <div class="overlap-legend">
+          <div class="overlap-box"></div>
+          <span class="mono" style="font-size:0.6rem; color: var(--text-muted);">Overlap region (64 tokens, ~12.5%)</span>
+        </div>
+
+        <div style="margin-top:1.25rem; padding-top:1rem; border-top: 1px solid var(--border);">
+          <div style="font-family:'JetBrains Mono',monospace; font-size:0.6rem; color:var(--text-muted); letter-spacing:0.1em; margin-bottom:0.75rem;">PARAMETERS</div>
+          <div style="display:flex; flex-direction:column; gap:0.5rem;">
+            <div style="display:flex; justify-content:space-between; font-family:'JetBrains Mono',monospace; font-size:0.68rem;">
+              <span style="color:var(--text-muted);">chunk_size</span>
+              <span style="color:var(--accent-bright);">512 tokens</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-family:'JetBrains Mono',monospace; font-size:0.68rem;">
+              <span style="color:var(--text-muted);">chunk_overlap</span>
+              <span style="color:var(--accent-bright);">64 tokens</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-family:'JetBrains Mono',monospace; font-size:0.68rem;">
+              <span style="color:var(--text-muted);">effective_stride</span>
+              <span style="color:var(--accent-bright);">448 tokens</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════
+     STRATEGY 02 — RECURSIVE
+══════════════════════════════ -->
+<section class="strategy" id="recursive">
+  <div class="strategy-bg-num">02</div>
+  <div class="strategy-grid">
+
+    <!-- LEFT: Content -->
+    <div>
+      <div class="strategy-header">
+        <div class="strategy-tag">Strategy 02</div>
+        <h2>Recursive Text<br><span>Splitting</span></h2>
+        <p class="strategy-desc">
+          A smarter fixed-size variant that respects document structure. It tries a
+          hierarchy of separators — paragraphs, then newlines, then sentences, then
+          words — splitting only when a chunk exceeds the target size.
+        </p>
+        <p class="strategy-desc">
+          This is the <strong style="color:var(--text-primary)">LangChain default</strong> and the
+          de facto production standard. It produces chunks that almost always end at
+          natural linguistic boundaries while still guaranteeing a maximum size.
+        </p>
+      </div>
+
+      <div class="pros-cons">
+        <div class="pros">
+          <div class="pros-cons-title">Strengths</div>
+          <ul>
+            <li>Respects linguistic structure</li>
+            <li>Rarely splits mid-sentence</li>
+            <li>Configurable separator hierarchy</li>
+            <li>Still O(n) compute cost</li>
+            <li>Production-battle-tested</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <div class="pros-cons-title">Weaknesses</div>
+          <ul>
+            <li>Chunk sizes vary</li>
+            <li>Separator list needs tuning</li>
+            <li>Doesn't understand meaning</li>
+            <li>Topic changes still get mixed</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="when-to-use">
+        <strong>When to use</strong>
+        General-purpose RAG pipelines, structured documents (markdown, code, reports).
+        This should be your default when you don't have the budget or latency budget
+        for embedding-based splitting.
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+          <span class="code-lang">Python</span>
+        </div>
+        <pre><span class="kw">from</span> langchain.text_splitter <span class="kw">import</span> <span class="cls">RecursiveCharacterTextSplitter</span>
+
+splitter = <span class="cls">RecursiveCharacterTextSplitter</span>(
+    chunk_size=<span class="num">1000</span>,
+    chunk_overlap=<span class="num">100</span>,
+    separators=[
+        <span class="str">"\n\n"</span>,   <span class="cm"># paragraph break (try first)</span>
+        <span class="str">"\n"</span>,     <span class="cm"># newline</span>
+        <span class="str">". "</span>,     <span class="cm"># sentence end</span>
+        <span class="str">" "</span>,      <span class="cm"># word boundary</span>
+        <span class="str">""</span>,       <span class="cm"># character (last resort)</span>
+    ],
+)
+
+chunks = splitter.<span class="fn">split_text</span>(document)
+
+<span class="cm"># For code: language-aware separators</span>
+<span class="kw">from</span> langchain.text_splitter <span class="kw">import</span> <span class="cls">Language</span>
+code_splitter = <span class="cls">RecursiveCharacterTextSplitter</span>.<span class="fn">from_language</span>(
+    language=<span class="cls">Language</span>.PYTHON,
+    chunk_size=<span class="num">2000</span>,
+    chunk_overlap=<span class="num">200</span>,
+)</pre>
+      </div>
+    </div>
+
+    <!-- RIGHT: Visualization -->
+    <div>
+      <div class="viz-panel" id="viz-recursive">
+        <div class="viz-title">Separator Hierarchy</div>
+
+        <div class="recursive-demo">
+          <div class="rec-level level-0" id="rl0">
+            <div class="rec-level-label">
+              Pass 1 — try separator <span class="sep-token">"\n\n"</span>
+            </div>
+            <div class="rec-chunks">
+              <div class="rec-chunk">¶ Introduction block</div>
+              <div class="rec-chunk">¶ Methods section</div>
+              <div class="rec-chunk" style="border-color:#5a3010; background:#200e04; color:#d4aa60;">¶ OVERSIZED: Results</div>
+            </div>
+          </div>
+
+          <div class="rec-arrow">Split oversized chunk with next separator</div>
+
+          <div class="rec-level level-1" id="rl1">
+            <div class="rec-level-label">
+              Pass 2 — try separator <span class="sep-token">"\n"</span>
+            </div>
+            <div class="rec-chunks">
+              <div class="rec-chunk">Results line 1</div>
+              <div class="rec-chunk">Results line 2–3</div>
+              <div class="rec-chunk" style="border-color:#3a1a40; background:#140a18; color:#c07ab0;">line 4–6 OVERSIZED</div>
+            </div>
+          </div>
+
+          <div class="rec-arrow">Still too large — go deeper</div>
+
+          <div class="rec-level level-2" id="rl2">
+            <div class="rec-level-label">
+              Pass 3 — try separator <span class="sep-token">". "</span>
+            </div>
+            <div class="rec-chunks">
+              <div class="rec-chunk">Sentence A.</div>
+              <div class="rec-chunk">Sentence B.</div>
+              <div class="rec-chunk">Sentence C.</div>
+              <div class="rec-chunk">Sentence D.</div>
+            </div>
+          </div>
+
+          <div class="rec-arrow">All chunks ≤ size limit. Done ✓</div>
+
+          <div class="rec-level level-3" id="rl3">
+            <div class="rec-level-label">
+              Final result — <span class="sep-token">N chunks</span> of ≤ 1000 tokens
+            </div>
+            <div class="rec-chunks">
+              <div class="rec-chunk">¶ Introduction block</div>
+              <div class="rec-chunk">¶ Methods section</div>
+              <div class="rec-chunk">Results line 1</div>
+              <div class="rec-chunk">Results line 2–3</div>
+              <div class="rec-chunk">Sentence A.</div>
+              <div class="rec-chunk">Sentence B.</div>
+              <div class="rec-chunk">Sentence C.</div>
+              <div class="rec-chunk">Sentence D.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════
+     STRATEGY 03 — SEMANTIC
+══════════════════════════════ -->
+<section class="strategy" id="semantic">
+  <div class="strategy-bg-num">03</div>
+  <div class="strategy-grid">
+
+    <!-- LEFT: Content -->
+    <div>
+      <div class="strategy-header">
+        <div class="strategy-tag">Strategy 03</div>
+        <h2>Semantic<br><span>Chunking</span></h2>
+        <p class="strategy-desc">
+          The most sophisticated approach. Every sentence is embedded using a language
+          model and cosine similarity is computed between adjacent sentences. When
+          similarity drops below a threshold, a chunk boundary is placed.
+        </p>
+        <p class="strategy-desc">
+          The result: chunks that capture a single coherent topic or thought, regardless
+          of their token length. This maximally aligns with how vector search retrieves
+          — by <em>meaning</em>, not position.
+        </p>
+      </div>
+
+      <div class="pros-cons">
+        <div class="pros">
+          <div class="pros-cons-title">Strengths</div>
+          <ul>
+            <li>Meaning-preserving boundaries</li>
+            <li>Best retrieval precision</li>
+            <li>Topic-coherent chunks</li>
+            <li>Adapts to document structure</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <div class="pros-cons-title">Weaknesses</div>
+          <ul>
+            <li>Requires embedding at index time</li>
+            <li>2–10× higher ingestion cost</li>
+            <li>Threshold is hard to tune</li>
+            <li>Chunks vary wildly in size</li>
+            <li>LLM context limits can break</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="when-to-use">
+        <strong>When to use</strong>
+        High-stakes retrieval where precision matters: legal documents, medical literature,
+        research papers. When retrieval quality directly impacts downstream accuracy and
+        you can absorb the embedding cost at ingest time.
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+          <span class="code-lang">Python</span>
+        </div>
+        <pre><span class="kw">from</span> langchain_experimental.text_splitter <span class="kw">import</span> <span class="cls">SemanticChunker</span>
+<span class="kw">from</span> langchain_openai <span class="kw">import</span> <span class="cls">OpenAIEmbeddings</span>
+
+embeddings = <span class="cls">OpenAIEmbeddings</span>(model=<span class="str">"text-embedding-3-small"</span>)
+
+chunker = <span class="cls">SemanticChunker</span>(
+    embeddings=embeddings,
+    breakpoint_threshold_type=<span class="str">"percentile"</span>,  <span class="cm"># or "std_dev", "interquartile"</span>
+    breakpoint_threshold_amount=<span class="num">95</span>,          <span class="cm"># split at top 5% similarity drops</span>
+)
+
+chunks = chunker.<span class="fn">split_text</span>(document)
+
+<span class="cm"># From scratch: compute cosine drops manually</span>
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+
+<span class="kw">def</span> <span class="fn">cosine_sim</span>(a, b):
+    <span class="kw">return</span> np.<span class="fn">dot</span>(a, b) / (np.<span class="fn">linalg.norm</span>(a) * np.<span class="fn">linalg.norm</span>(b))
+
+<span class="cm"># Embed sentences, compute adjacent similarities, split on drops</span>
+sentences = text.<span class="fn">split</span>(<span class="str">". "</span>)
+embeds = embeddings.<span class="fn">embed_documents</span>(sentences)
+sims = [<span class="fn">cosine_sim</span>(embeds[i], embeds[i+<span class="num">1</span>]) <span class="kw">for</span> i <span class="kw">in</span> <span class="fn">range</span>(<span class="fn">len</span>(embeds)-<span class="num">1</span>)]
+threshold = np.<span class="fn">percentile</span>(sims, <span class="num">5</span>)  <span class="cm"># bottom 5% = split points</span></pre>
+      </div>
+    </div>
+
+    <!-- RIGHT: Visualization -->
+    <div>
+      <div class="viz-panel" id="viz-semantic">
+        <div class="viz-title">Similarity-Based Splitting</div>
+
+        <div style="font-family:'JetBrains Mono',monospace; font-size:0.58rem; color:var(--text-muted); margin-bottom:0.75rem; letter-spacing:0.1em;">
+          COSINE SIM → ADJACENT SENTENCES
+        </div>
+
+        <div class="semantic-demo">
+
+          <div class="sentence-row group-a" id="ss0">
+            <span class="sim-score">sim:</span>
+            <div class="sim-bar-wrap"><div class="sim-bar" data-width="91"></div></div>
+            <span class="sentence-text">Neural networks learn representations...</span>
+          </div>
+
+          <div class="sentence-row group-a" id="ss1">
+            <span class="sim-score">0.91</span>
+            <div class="sim-bar-wrap"><div class="sim-bar" data-width="87"></div></div>
+            <span class="sentence-text">Backpropagation updates weights...</span>
+          </div>
+
+          <div class="sentence-row group-a" id="ss2">
+            <span class="sim-score">0.87</span>
+            <div class="sim-bar-wrap"><div class="sim-bar" data-width="83"></div></div>
+            <span class="sentence-text">Gradient descent minimizes loss...</span>
+          </div>
+
+          <div class="split-indicator" id="split1">✦ CHUNK BOUNDARY — similarity drops to 0.41</div>
+
+          <div class="sentence-row group-b" id="ss3">
+            <span class="sim-score">0.41</span>
+            <div class="sim-bar-wrap"><div class="sim-bar" data-width="88"></div></div>
+            <span class="sentence-text">Transformers use attention layers...</span>
+          </div>
+
+          <div class="sentence-row group-b" id="ss4">
+            <span class="sim-score">0.88</span>
+            <div class="sim-bar-wrap"><div class="sim-bar" data-width="85"></div></div>
+            <span class="sentence-text">Multi-head attention captures context...</span>
+          </div>
+
+          <div class="sentence-row group-b" id="ss5">
+            <span class="sim-score">0.85</span>
+            <div class="sim-bar-wrap"><div class="sim-bar" data-width="80"></div></div>
+            <span class="sentence-text">Positional encodings preserve order...</span>
+          </div>
+
+          <div class="split-indicator" id="split2">✦ CHUNK BOUNDARY — similarity drops to 0.38</div>
+
+          <div class="sentence-row group-c" id="ss6">
+            <span class="sim-score">0.38</span>
+            <div class="sim-bar-wrap"><div class="sim-bar" data-width="92"></div></div>
+            <span class="sentence-text">RLHF aligns models to human intent...</span>
+          </div>
+
+          <div class="sentence-row group-c" id="ss7">
+            <span class="sim-score">0.92</span>
+            <div class="sim-bar-wrap"><div class="sim-bar" data-width="89"></div></div>
+            <span class="sentence-text">Reward models score completions...</span>
+          </div>
+
+        </div>
+
+        <div style="margin-top:1.25rem; padding-top:1rem; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:0.4rem;">
+          <div style="font-family:'JetBrains Mono',monospace; font-size:0.6rem; color:var(--text-muted); letter-spacing:0.1em; margin-bottom:0.35rem;">OUTPUT CHUNKS</div>
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <span style="background:#0d2a1a; border:1px solid #1a5a30; color:#7aaa8a; font-family:'JetBrains Mono',monospace; font-size:0.58rem; padding:3px 8px; border-radius:2px;">chunk_0 — Neural nets (3 sentences)</span>
+            <span style="background:#0d1828; border:1px solid #1a3060; color:#7ab0e0; font-family:'JetBrains Mono',monospace; font-size:0.58rem; padding:3px 8px; border-radius:2px;">chunk_1 — Transformers (3 sentences)</span>
+            <span style="background:#1a0d26; border:1px solid #3a1850; color:#c07ab0; font-family:'JetBrains Mono',monospace; font-size:0.58rem; padding:3px 8px; border-radius:2px;">chunk_2 — RLHF (2 sentences)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ══ COMPARISON TABLE ══ -->
+<section class="comparison" id="comparison">
+  <h2><em>Side-by-Side</em> Comparison</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Strategy</th>
+          <th>Boundary Quality</th>
+          <th>Compute Cost</th>
+          <th>Complexity</th>
+          <th>Chunk Size</th>
+          <th>Best For</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Fixed-Size</td>
+          <td><span class="badge badge-high">Poor</span></td>
+          <td><span class="badge badge-low">Negligible</span></td>
+          <td><span class="badge badge-simple">Simple</span></td>
+          <td>Uniform</td>
+          <td>Prototypes, logs, uniform text</td>
+        </tr>
+        <tr>
+          <td>Recursive Splitting</td>
+          <td><span class="badge badge-med">Good</span></td>
+          <td><span class="badge badge-low">Negligible</span></td>
+          <td><span class="badge badge-medium">Moderate</span></td>
+          <td>Near-uniform</td>
+          <td>Production default, markdown, code</td>
+        </tr>
+        <tr>
+          <td>Semantic Chunking</td>
+          <td><span class="badge badge-low">Excellent</span></td>
+          <td><span class="badge badge-high">High (embeddings)</span></td>
+          <td><span class="badge badge-complex">Complex</span></td>
+          <td>Variable</td>
+          <td>High-precision RAG, research docs</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:1.25rem; margin-top:2.5rem;">
+    <div style="background:var(--bg-card); border:1px solid var(--border); padding:1.5rem; border-top:2px solid var(--accent-dim);">
+      <div style="font-family:'JetBrains Mono',monospace; font-size:0.6rem; letter-spacing:0.15em; color:var(--accent); text-transform:uppercase; margin-bottom:0.75rem;">Rule of Thumb</div>
+      <p style="font-size:0.875rem; color:var(--text-sec); line-height:1.7;">
+        Start with <strong style="color:var(--text-primary)">Recursive Splitting</strong>. Move to Semantic only after measuring
+        retrieval quality and confirming the embedding cost is justified by recall gains.
+      </p>
+    </div>
+    <div style="background:var(--bg-card); border:1px solid var(--border); padding:1.5rem; border-top:2px solid var(--accent-dim);">
+      <div style="font-family:'JetBrains Mono',monospace; font-size:0.6rem; letter-spacing:0.15em; color:var(--accent); text-transform:uppercase; margin-bottom:0.75rem;">Tuning Chunk Size</div>
+      <p style="font-size:0.875rem; color:var(--text-sec); line-height:1.7;">
+        Match chunk size to your LLM's context window and query complexity. Short factual
+        queries → smaller chunks (256–512). Long analytical queries → larger chunks (1024–2048).
+      </p>
+    </div>
+    <div style="background:var(--bg-card); border:1px solid var(--border); padding:1.5rem; border-top:2px solid var(--accent-dim);">
+      <div style="font-family:'JetBrains Mono',monospace; font-size:0.6rem; letter-spacing:0.15em; color:var(--accent); text-transform:uppercase; margin-bottom:0.75rem;">Evaluating Quality</div>
+      <p style="font-size:0.875rem; color:var(--text-sec); line-height:1.7;">
+        Use RAGAS metrics: <strong style="color:var(--text-primary)">context precision</strong> and <strong style="color:var(--text-primary)">context recall</strong>
+        tell you how well your chunks serve retrieval before touching generation quality.
+      </p>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══ FOOTER ══ -->
+<footer>
+  <div class="footer-brand">Chunking <em>Strategies</em></div>
+  <div class="footer-meta">RAG Systems — Text Preprocessing Guide</div>
+</footer>
+
+
+<script>
+  // Set sim-bar widths from data attributes (visible by default)
+  document.querySelectorAll('.sim-bar[data-width]').forEach(bar => {
+    bar.style.setProperty('--sim-w', bar.dataset.width + '%');
+  });
+
+  // Static text for fixed viz (shown immediately)
+  const textEl = document.getElementById('fixed-text-display');
+  if (textEl) {
+    textEl.textContent = 'Large language models process text by converting raw strings into tokens. Each token typically represents a word-piece or subword unit...';
+  }
+
+  // Add pre-animate class to elements that CAN animate (opt-in)
+  // Content is visible by default; JS enhances with staggered reveals
+  document.querySelectorAll('.strategy, .comparison').forEach(el => {
+    el.classList.add('pre-animate');
+  });
+  document.querySelectorAll('.rec-level').forEach(el => el.classList.add('pre-animate'));
+  document.querySelectorAll('.sentence-row, .split-indicator').forEach(el => el.classList.add('pre-animate'));
+  document.querySelectorAll('.chunk-bar').forEach(el => el.classList.add('pre-animate'));
+
+  // ── IntersectionObserver — reveals pre-animated elements ──
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        observer.unobserve(entry.target);
+        if (entry.target.id === 'fixed')     animateFixed();
+        if (entry.target.id === 'recursive') animateRecursive();
+        if (entry.target.id === 'semantic')  animateSemantic();
+      }
+    });
+  }, { threshold: 0.08 });
+
+  document.querySelectorAll('.strategy, .comparison').forEach(el => observer.observe(el));
+
+  // ── Fixed-size: typewriter + bar reveal ──
+  function animateFixed() {
+    const el = document.getElementById('fixed-text-display');
+    if (!el) return;
+    const sample = 'Large language models process text by converting raw strings into tokens. Each token typically represents a word-piece or subword unit. Tokenization is the first step in nearly all NLP pipelines...';
+    let i = 0;
+    el.textContent = '';
+    const iv = setInterval(() => { el.textContent += sample[i++]; if (i >= sample.length) clearInterval(iv); }, 18);
+    setTimeout(() => {
+      ['cb1','cb1o','cb2','cb2o','cb3'].forEach((id, idx) => {
+        setTimeout(() => {
+          const b = document.getElementById(id);
+          if (b) b.classList.add('animate');
+        }, idx * 120);
+      });
+    }, 500);
+  }
+
+  // ── Recursive: staggered level reveals ──
+  function animateRecursive() {
+    ['rl0','rl1','rl2','rl3'].forEach((id, i) => {
+      setTimeout(() => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('visible');
+      }, i * 350);
+    });
+  }
+
+  // ── Semantic: staggered row + bar width reveals ──
+  function animateSemantic() {
+    document.querySelectorAll('.sentence-row, .split-indicator').forEach((row, i) => {
+      setTimeout(() => {
+        row.classList.add('visible');
+        const bar = row.querySelector('.sim-bar');
+        if (bar) bar.style.width = (bar.dataset.width || 70) + '%';
+      }, i * 180);
+    });
+  }
+</script>
+</body>
+</html>

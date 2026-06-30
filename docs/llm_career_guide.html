@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DS → AI Engineer — Career Research 2025–2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Lora:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:          #f7f4ef;
+    --surface:     #ffffff;
+    --surface-2:   #f0ece4;
+    --border:      #e2ddd5;
+    --ink:         #1a1714;
+    --ink-muted:   #7a7268;
+    --ink-faint:   #b0a99f;
+    --red:         #c0392b;
+    --red-light:   #fdf0ee;
+    --green:       #1a6b3a;
+    --green-light: #edf7f1;
+    --amber:       #b07d0a;
+    --amber-light: #fdf8ec;
+    --blue:        #1a3f7a;
+    --blue-light:  #eef2fb;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Lora', serif;
+    font-size: 15px;
+    line-height: 1.75;
+  }
+
+  header {
+    background: var(--ink);
+    color: #f7f4ef;
+    padding: 64px 0 56px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  header::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 400px; height: 100%;
+    background: repeating-linear-gradient(-45deg, transparent, transparent 8px, rgba(255,255,255,0.03) 8px, rgba(255,255,255,0.03) 9px);
+  }
+
+  .header-inner {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 40px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .header-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(247,244,239,0.5);
+    margin-bottom: 20px;
+  }
+
+  header h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(32px, 5vw, 56px);
+    font-weight: 800;
+    line-height: 1.08;
+    letter-spacing: -0.02em;
+    margin-bottom: 20px;
+  }
+
+  header h1 span { color: #e8a830; }
+
+  .header-sub {
+    font-size: 15px;
+    line-height: 1.8;
+    color: rgba(247,244,239,0.65);
+    max-width: 540px;
+    font-style: italic;
+  }
+
+  .header-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 28px;
+  }
+
+  .pill {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    padding: 5px 12px;
+    border: 1px solid rgba(247,244,239,0.2);
+    border-radius: 2px;
+    color: rgba(247,244,239,0.7);
+  }
+
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--ink);
+    border-bottom: 1px solid #333;
+    padding: 0 40px;
+    display: flex;
+    align-items: center;
+    overflow-x: auto;
+    scrollbar-width: none;
+    gap: 4px;
+  }
+  nav::-webkit-scrollbar { display: none; }
+
+  nav a {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: rgba(247,244,239,0.45);
+    text-decoration: none;
+    padding: 14px 12px;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  nav a:hover { color: #f7f4ef; border-bottom-color: #e8a830; }
+
+  main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 40px 100px;
+  }
+
+  .section-title {
+    margin: 64px 0 28px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid var(--ink);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .section-title h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  .section-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  .callout {
+    border-left: 3px solid var(--ink);
+    padding: 18px 22px;
+    margin: 28px 0;
+    background: var(--surface);
+  }
+  .callout.green  { border-color: var(--green);  background: var(--green-light); }
+  .callout.red    { border-color: var(--red);    background: var(--red-light); }
+  .callout.amber  { border-color: var(--amber);  background: var(--amber-light); }
+  .callout.blue   { border-color: var(--blue);   background: var(--blue-light); }
+
+  .callout-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 8px;
+  }
+
+  .callout p { font-size: 14px; line-height: 1.7; }
+  .callout strong { font-weight: 600; }
+
+  .salary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin: 24px 0;
+  }
+
+  .salary-cell {
+    background: var(--surface);
+    padding: 20px 22px;
+  }
+
+  .salary-cell.hdr {
+    background: var(--ink);
+    color: #f7f4ef;
+  }
+
+  .salary-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 6px;
+  }
+  .salary-cell.hdr .salary-label { color: rgba(247,244,239,0.5); }
+
+  .salary-value {
+    font-family: 'Syne', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.2;
+  }
+  .salary-cell.hdr .salary-value { color: #e8a830; }
+
+  .salary-note {
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin-top: 4px;
+    font-style: italic;
+  }
+
+  .tier { margin-bottom: 36px; }
+
+  .tier-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+
+  .tier-badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 12px;
+    border-radius: 2px;
+    letter-spacing: 0.08em;
+  }
+
+  .t1   { background: #c0392b; color: white; }
+  .t2   { background: #b07d0a; color: white; }
+  .t3   { background: #1a6b3a; color: white; }
+  .skip { background: var(--border); color: var(--ink-muted); }
+
+  .tier-desc {
+    font-size: 13px;
+    color: var(--ink-muted);
+    font-style: italic;
+    margin-bottom: 14px;
+  }
+
+  .concept-row {
+    display: grid;
+    grid-template-columns: 36px 1fr 2fr;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-bottom: none;
+    background: var(--surface);
+    transition: background 0.15s;
+  }
+  .concept-row:last-child { border-bottom: 1px solid var(--border); }
+  .concept-row:hover { background: var(--surface-2); }
+
+  .row-num {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-faint);
+    border-right: 1px solid var(--border);
+    padding: 12px 0;
+  }
+
+  .row-name {
+    padding: 12px 16px;
+    border-right: 1px solid var(--border);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+  }
+
+  .row-why {
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--ink-muted);
+    display: flex;
+    align-items: center;
+    line-height: 1.6;
+  }
+  .row-why strong { color: var(--ink); font-weight: 600; }
+
+  .company-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 24px 0;
+  }
+
+  .company-card {
+    border: 1px solid var(--border);
+    padding: 20px 22px;
+    background: var(--surface);
+  }
+
+  .company-type {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 10px;
+  }
+
+  .company-names {
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.8;
+  }
+
+  .company-note {
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin-top: 8px;
+    font-style: italic;
+  }
+
+  .gap-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+
+  .gap-table th {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    text-align: left;
+    padding: 10px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    font-weight: 400;
+  }
+
+  .gap-table td {
+    padding: 11px 14px;
+    border: 1px solid var(--border);
+    vertical-align: top;
+    line-height: 1.65;
+    background: var(--surface);
+  }
+
+  .gap-table td:first-child {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    width: 30%;
+  }
+
+  .have { color: var(--green); font-weight: 600; }
+  .need { color: var(--red);   font-weight: 600; }
+
+  .moat-box {
+    background: var(--ink);
+    color: #f7f4ef;
+    padding: 32px 36px;
+    margin: 36px 0;
+  }
+
+  .moat-box .moat-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #e8a830;
+    margin-bottom: 14px;
+  }
+
+  .moat-box p {
+    font-size: 18px;
+    font-style: italic;
+    line-height: 1.7;
+    color: rgba(247,244,239,0.9);
+  }
+
+  .moat-box strong { color: #f7f4ef; font-style: normal; }
+
+  footer {
+    background: var(--ink);
+    color: rgba(247,244,239,0.4);
+    padding: 28px 40px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  @media (max-width: 640px) {
+    main, footer { padding-left: 20px; padding-right: 20px; }
+    .header-inner { padding: 0 20px; }
+    nav { padding: 0 20px; }
+    .salary-grid, .company-grid { grid-template-columns: 1fr; }
+    .concept-row { grid-template-columns: 36px 1fr; }
+    .row-why { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <p class="header-tag">// Career Research · India · 2025–2026</p>
+    <h1>Data Scientist<br>→ <span>AI Engineer</span></h1>
+    <p class="header-sub">Which of the 36 LLM concepts actually matter for landing a high-paying, ownership-driven role at a fast-growing startup in India.</p>
+    <div class="header-pills">
+      <span class="pill">Based in India</span>
+      <span class="pill">Currently: Data Scientist</span>
+      <span class="pill">Target: AI / GenAI Engineer</span>
+      <span class="pill">Goal: High Pay + Ownership + Fun</span>
+    </div>
+  </div>
+</header>
+
+<nav>
+  <a href="#role">Target Role</a>
+  <a href="#salary">Salary</a>
+  <a href="#gap">DS → AI Gap</a>
+  <a href="#priority">Priority List</a>
+  <a href="#companies">Companies</a>
+  <a href="#moat">Your Moat</a>
+</nav>
+
+<main>
+
+  <div class="section-title" id="role">
+    <h2>The Target Role</h2>
+    <span class="section-tag">what to aim for</span>
+  </div>
+
+  <div class="callout blue">
+    <div class="callout-label">Title to target</div>
+    <p><strong>AI Engineer / GenAI Engineer / LLM Engineer</strong> — not "Data Scientist with LLM exposure." The title shift matters for salary bands, scope of work, and how you're perceived in interviews. Founding AI Engineer at a Series A–B startup is the sweet spot for ownership + pay + fun.</p>
+  </div>
+
+  <div class="concept-row">
+    <div class="row-num">↗</div>
+    <div class="row-name">Demand vs supply</div>
+    <div class="row-why">Demand growing <strong>40% YoY</strong>, qualified supply growing under 15%. Widest gap in Indian tech right now.</div>
+  </div>
+  <div class="concept-row">
+    <div class="row-num">₹</div>
+    <div class="row-name">Pay premium</div>
+    <div class="row-why">GenAI engineers earn <strong>25–40% more</strong> than equivalent-experience ML/DS roles at every level.</div>
+  </div>
+  <div class="concept-row">
+    <div class="row-num">⚡</div>
+    <div class="row-name">Ownership</div>
+    <div class="row-why">Startup AI engineers own the <strong>full stack</strong>: model selection → fine-tuning → inference → evaluation → production. Data scientists own a slice.</div>
+  </div>
+  <div class="concept-row" style="border-bottom: 1px solid var(--border);">
+    <div class="row-num">→</div>
+    <div class="row-name">Pace</div>
+    <div class="row-why">Fast-growing AI startups ship weekly. The role is engineering-forward — <strong>you build and you ship</strong>, not just analyse.</div>
+  </div>
+
+  <div class="section-title" id="salary">
+    <h2>Salary Reality Check</h2>
+    <span class="section-tag">India market · 2025–2026</span>
+  </div>
+
+  <div class="salary-grid">
+    <div class="salary-cell hdr">
+      <div class="salary-label">Level</div>
+      <div class="salary-value">Mid-level</div>
+      <div class="salary-note">3–5 yrs exp</div>
+    </div>
+    <div class="salary-cell hdr">
+      <div class="salary-label">Level</div>
+      <div class="salary-value">Senior</div>
+      <div class="salary-note">5–8 yrs exp</div>
+    </div>
+    <div class="salary-cell hdr">
+      <div class="salary-label">Level</div>
+      <div class="salary-value">Remote / Global</div>
+      <div class="salary-note">for US/EU startups</div>
+    </div>
+    <div class="salary-cell">
+      <div class="salary-label">Startup (Series A–B)</div>
+      <div class="salary-value">₹25–60 LPA</div>
+      <div class="salary-note">+ ESOPs (significant upside)</div>
+    </div>
+    <div class="salary-cell">
+      <div class="salary-label">Well-funded startup</div>
+      <div class="salary-value">₹60–100 LPA</div>
+      <div class="salary-note">+ ESOPs + performance bonus</div>
+    </div>
+    <div class="salary-cell">
+      <div class="salary-label">Remote for global startup</div>
+      <div class="salary-value">$80–150K</div>
+      <div class="salary-note">Near-parity pay now common</div>
+    </div>
+    <div class="salary-cell">
+      <div class="salary-label">GenAI YoY salary growth</div>
+      <div class="salary-value">+35%</div>
+      <div class="salary-note">Fastest growing tech role</div>
+    </div>
+    <div class="salary-cell">
+      <div class="salary-label">vs equivalent DS role</div>
+      <div class="salary-value">+25–40%</div>
+      <div class="salary-note">Premium for LLM specialization</div>
+    </div>
+    <div class="salary-cell">
+      <div class="salary-label">Adding GenAI to DS skills</div>
+      <div class="salary-value">+20–40%</div>
+      <div class="salary-note">On next offer, per market data</div>
+    </div>
+  </div>
+
+  <div class="callout amber">
+    <div class="callout-label">The ESOP angle</div>
+    <p>At a Series A–B startup that grows to Series C or IPO, ESOPs from a ₹30–40 LPA role can become worth <strong>5–20× the base salary</strong>. This is the "thrilling" financial bet — the right startup matters as much as the role itself.</p>
+  </div>
+
+  <div class="section-title" id="gap">
+    <h2>The DS → AI Engineer Gap</h2>
+    <span class="section-tag">what you have vs what you need</span>
+  </div>
+
+  <div class="callout green">
+    <div class="callout-label">Your existing advantage</div>
+    <p>Data scientists have <strong>statistics, experimentation, and model evaluation intuition</strong> that most AI engineers (who come from software engineering) completely lack. This is genuinely rare — especially for building rigorous eval pipelines and catching model regressions in production.</p>
+  </div>
+
+  <table class="gap-table">
+    <thead>
+      <tr>
+        <th>Skill area</th>
+        <th>DS background</th>
+        <th>Gap / what to add</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>ML fundamentals</td>
+        <td><span class="have">✓ Strong</span></td>
+        <td>No gap. You know training, loss, evaluation.</td>
+      </tr>
+      <tr>
+        <td>Statistics / experimentation</td>
+        <td><span class="have">✓ Strong</span></td>
+        <td>No gap. This is your moat vs software engineers entering AI.</td>
+      </tr>
+      <tr>
+        <td>LLM APIs + prompt engineering</td>
+        <td><span class="need">⚠ Partial</span></td>
+        <td>Know Claude/OpenAI APIs deeply. Tool use, structured output, system prompts.</td>
+      </tr>
+      <tr>
+        <td>RAG pipelines</td>
+        <td><span class="need">⚠ Likely partial</span></td>
+        <td>Build end-to-end: chunking → embedding → retrieval → reranking → eval.</td>
+      </tr>
+      <tr>
+        <td>Agent frameworks</td>
+        <td><span class="need">✗ Gap</span></td>
+        <td>LangGraph, tool use loops, multi-agent orchestration, prompt injection defense.</td>
+      </tr>
+      <tr>
+        <td>Fine-tuning (SFT / DPO)</td>
+        <td><span class="need">⚠ Likely partial</span></td>
+        <td>QLoRA on LLaMA 3 with Axolotl/TRL. DPO with preference pairs. Eval with LLM-as-judge.</td>
+      </tr>
+      <tr>
+        <td>Inference / serving</td>
+        <td><span class="need">✗ Gap</span></td>
+        <td>vLLM, quantization (AWQ/GPTQ), KV cache behavior. "Ship at low cost" thinking.</td>
+      </tr>
+      <tr>
+        <td>Production systems</td>
+        <td><span class="need">⚠ Partial</span></td>
+        <td>FastAPI, Docker, async patterns. Notebook → deployed API mindset shift.</td>
+      </tr>
+      <tr>
+        <td>Evaluation pipelines</td>
+        <td><span class="have">✓ Strong base</span></td>
+        <td>Extend with LLM-as-judge, benchmark contamination awareness, regression suites.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout red">
+    <div class="callout-label">The real mindset shift</div>
+    <p>Data scientists optimize for <strong>model accuracy</strong>. AI engineers optimize for <strong>system quality</strong> — latency, cost, failure modes, uptime. Learn to think: "what happens at 3am when this breaks, and who gets paged?"</p>
+  </div>
+
+  <div class="section-title" id="priority">
+    <h2>Priority List — All 36 Concepts</h2>
+    <span class="section-tag">ranked for your specific goal</span>
+  </div>
+
+  <!-- TIER 1 -->
+  <div class="tier">
+    <div class="tier-header">
+      <span class="tier-badge t1">Priority 1 — BLOCKING</span>
+    </div>
+    <p class="tier-desc">Appear in 80%+ of startup AI engineer job descriptions. Solid before applying. These are day-1 work.</p>
+
+    <div class="concept-row">
+      <div class="row-num">27</div>
+      <div class="row-name">Tool Use / Function Calling</div>
+      <div class="row-why"><strong>The atom of agents.</strong> Every agentic system builds on this. Tool schema quality determines agent reliability more than model choice.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">20</div>
+      <div class="row-name">RAG</div>
+      <div class="row-why"><strong>#1 production pattern at every AI startup.</strong> You'll build a RAG pipeline in week 1. Know chunking, embedding, retrieval, reranking, and eval (RAGAS).</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">28</div>
+      <div class="row-name">ReAct Pattern</div>
+      <div class="row-why"><strong>The loop every agent runs on.</strong> Thought→Action→Observation. Need this to build agents and to debug them when they fail mid-task.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">32</div>
+      <div class="row-name">Structured Outputs</div>
+      <div class="row-why"><strong>Production requirement.</strong> Free-text generation fails at scale. instructor + constrained decoding = difference between demo and system.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">12</div>
+      <div class="row-name">SFT / Fine-Tuning</div>
+      <div class="row-why"><strong>Startups fine-tune constantly.</strong> QLoRA on LLaMA 3 with Axolotl/TRL is a standard workflow. Your DS background makes you better at this than most.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">14</div>
+      <div class="row-name">DPO</div>
+      <div class="row-why"><strong>The alignment method at every open-source shop.</strong> Replaced RLHF+PPO. If you're fine-tuning for behavior quality, you're using DPO or a variant.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">24</div>
+      <div class="row-name">LLM-as-Judge</div>
+      <div class="row-why"><strong>Your primary eval method at a startup.</strong> Know MT-Bench, AlpacaEval, and the biases (length preference, positional bias) so you don't over-trust results.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">7</div>
+      <div class="row-name">KV Cache</div>
+      <div class="row-why"><strong>You will hit inference cost walls.</strong> Explains every serving decision. Memory pressure from KV cache is why batch sizes are limited and context costs money.</div>
+    </div>
+    <div class="concept-row" style="border-bottom: 1px solid var(--border);">
+      <div class="row-num">10</div>
+      <div class="row-name">Quantization</div>
+      <div class="row-why"><strong>70B in INT4 = 35GB instead of 140GB.</strong> AWQ ships with vLLM. Every cost-sensitive startup deploys quantized models. Essential for infra decisions.</div>
+    </div>
+  </div>
+
+  <!-- TIER 2 -->
+  <div class="tier">
+    <div class="tier-header">
+      <span class="tier-badge t2">Priority 2 — DIFFERENTIATING</span>
+    </div>
+    <p class="tier-desc">Separates "can build a demo" from "can own production AI systems." Learn within 3 months of job searching.</p>
+
+    <div class="concept-row">
+      <div class="row-num">31</div>
+      <div class="row-name">Multi-Agent Orchestration</div>
+      <div class="row-why"><strong>Most ambitious startup products are multi-agent.</strong> LangGraph, CrewAI. Supervisor patterns, handoffs, debugging distributed agent failures.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">29</div>
+      <div class="row-name">Agent Memory Types</div>
+      <div class="row-why"><strong>Long-horizon agents fail from bad memory design.</strong> In-context / episodic / semantic — wrong choice causes agents to forget or repeat work mid-task.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">36</div>
+      <div class="row-name">MCP (Model Context Protocol)</div>
+      <div class="row-why"><strong>Rapidly becoming the USB-C of agent tooling.</strong> Adopted by OpenAI, Google, Cursor, VS Code. Write a server once, works everywhere.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">33</div>
+      <div class="row-name">Context Management &amp; Compaction</div>
+      <div class="row-why"><strong>Long-running agents hit context limits fast.</strong> Compaction strategy determines if an agent completes a multi-hour task or degrades halfway.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">35</div>
+      <div class="row-name">Prompt Injection &amp; Guardrails</div>
+      <div class="row-why"><strong>#1 security concern for production agents.</strong> Any agent touching the web is exposed. Startups get burned by this. Know Llama Guard, NeMo Guardrails.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">34</div>
+      <div class="row-name">Human-in-the-Loop</div>
+      <div class="row-why"><strong>Every serious production agent needs interrupt gates.</strong> LangGraph breakpoints, approval before irreversible actions. Design skill, not just code.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">30</div>
+      <div class="row-name">Planning &amp; Task Decomposition</div>
+      <div class="row-why"><strong>Ceiling on agent capability.</strong> CoT, plan-then-execute, replanning. Directly affects if your agent completes SWE-bench-level multi-step tasks.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">5</div>
+      <div class="row-name">FlashAttention</div>
+      <div class="row-why"><strong>Know why it exists, not how to implement it.</strong> Enabled 128K+ context training. Default in PyTorch 2.0+, vLLM. Explains long-context feasibility.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">23</div>
+      <div class="row-name">Benchmark Contamination</div>
+      <div class="row-why"><strong>Critical thinking skill.</strong> Stops you being fooled by "SOTA on MMLU" claims. Know why LiveBench/LiveCodeBench exist. Use in model selection discussions.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">25</div>
+      <div class="row-name">Chatbot Arena / ELO</div>
+      <div class="row-why"><strong>The real leaderboard.</strong> When choosing a model for a product, Arena ELO from real users beats any automated benchmark. Know how to read and cite it.</div>
+    </div>
+    <div class="concept-row" style="border-bottom: 1px solid var(--border);">
+      <div class="row-num">22</div>
+      <div class="row-name">Benchmarks (MMLU, GPQA, GSM8K)</div>
+      <div class="row-why"><strong>Know what each tests.</strong> MMLU ≠ reasoning. GPQA Diamond = hard science. Every model selection decision references these — know which to trust.</div>
+    </div>
+  </div>
+
+  <!-- TIER 3 -->
+  <div class="tier">
+    <div class="tier-header">
+      <span class="tier-badge t3">Priority 3 — KNOW THE CONCEPT</span>
+    </div>
+    <p class="tier-desc">Don't need to implement. Need to know what it is and why it exists. Relevant for senior roles or infra-adjacent work.</p>
+
+    <div class="concept-row">
+      <div class="row-num">8</div>
+      <div class="row-name">PagedAttention / vLLM</div>
+      <div class="row-why">Know it powers your serving layer. Know why it gives 2–4× throughput. Relevant for self-hosted deployment decisions.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">6</div>
+      <div class="row-name">GQA / MQA</div>
+      <div class="row-why">Know why LLaMA 3, Mistral use it. Reduces KV cache size, enables larger batches. Relevant when selecting open models to deploy.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">9</div>
+      <div class="row-name">Speculative Decoding</div>
+      <div class="row-why">Know it gives 2–4× latency gains at zero quality cost. Default-on in vLLM. Useful when explaining latency improvements to a team.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">16</div>
+      <div class="row-name">Mixture of Experts (MoE)</div>
+      <div class="row-why">Know why DeepSeek-V3 is efficient: active params ≠ total params. Relevant when evaluating "400B param" model claims.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">15</div>
+      <div class="row-name">Scaling Laws</div>
+      <div class="row-why">Close to your DS knowledge. Chinchilla: compute-optimal training. Why smaller overtrained models beat larger undertrained ones.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">13</div>
+      <div class="row-name">RLHF</div>
+      <div class="row-why">Context for why DPO exists. Know PPO instability issues. Useful for alignment pipeline discussions. Not needed for implementation.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">1</div>
+      <div class="row-name">Transformer &amp; Self-Attention</div>
+      <div class="row-why">If you don't already know this, make it Priority 1. The QKV mechanism is the atom everything else references.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">2</div>
+      <div class="row-name">Tokenization</div>
+      <div class="row-why">Know BPE, vocabulary size, why token count ≠ word count. Relevant for prompt design, cost estimation, non-English text failures.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">19</div>
+      <div class="row-name">Long Context / Ring Attention</div>
+      <div class="row-why">Know why 1M-token context is expensive (quadratic attention) and when to use RAG instead. Core product architecture decision.</div>
+    </div>
+    <div class="concept-row" style="border-bottom: 1px solid var(--border);">
+      <div class="row-num">26</div>
+      <div class="row-name">HELM</div>
+      <div class="row-why">Know the multi-dimensional evaluation framework concept. Calibration + fairness + accuracy. Useful for enterprise eval suite design.</div>
+    </div>
+  </div>
+
+  <!-- SKIP -->
+  <div class="tier">
+    <div class="tier-header">
+      <span class="tier-badge skip">Skip for now — unless joining a foundation model lab</span>
+    </div>
+    <p class="tier-desc">Sarvam AI research, Krutrim research, or GPU infra companies. Not needed for product AI engineering roles.</p>
+
+    <div class="concept-row">
+      <div class="row-num">18</div>
+      <div class="row-name">Tensor / Pipeline Parallelism</div>
+      <div class="row-why">Only relevant training foundation models across hundreds of GPUs. Product engineers don't implement this.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">18b</div>
+      <div class="row-name">ZeRO / DeepSpeed</div>
+      <div class="row-why">Relevant for large-scale fine-tuning. Know it exists; don't configure until training 70B+ models.</div>
+    </div>
+    <div class="concept-row">
+      <div class="row-num">3</div>
+      <div class="row-name">Positional Encoding Math (RoPE derivation)</div>
+      <div class="row-why">Know RoPE exists and is in LLaMA/Gemini. Skip the rotation matrix derivation unless doing context extension research.</div>
+    </div>
+    <div class="concept-row" style="border-bottom: 1px solid var(--border);">
+      <div class="row-num">4</div>
+      <div class="row-name">RMSNorm internals</div>
+      <div class="row-why">Know it's faster than LayerNorm and used in modern models. Don't need the math for product engineering roles.</div>
+    </div>
+  </div>
+
+  <div class="section-title" id="companies">
+    <h2>Companies Worth Targeting</h2>
+    <span class="section-tag">India + remote · 2025–2026</span>
+  </div>
+
+  <div class="company-grid">
+    <div class="company-card">
+      <div class="company-type">Indian AI-native startups</div>
+      <div class="company-names">Sarvam AI · Krutrim · Haptik · Yellow.ai · Skit.ai · Agara</div>
+      <div class="company-note">High ownership, building from scratch, strong ESOP upside. Sarvam/Krutrim are building India-language LLMs — highest prestige in Indian AI right now.</div>
+    </div>
+    <div class="company-card">
+      <div class="company-type">Product companies with AI teams</div>
+      <div class="company-names">Razorpay · PhonePe · Meesho · Zepto · CRED · Swiggy AI</div>
+      <div class="company-note">Better base pay stability, AI teams with real scale problems. Less cutting-edge but high ownership within a larger org.</div>
+    </div>
+    <div class="company-card">
+      <div class="company-type">Remote roles (global startups)</div>
+      <div class="company-names">US/EU Series A–B AI startups · YC job board · Wellfound</div>
+      <div class="company-note">₹80–120 LPA equivalent possible. Near-parity pay now common for senior roles. Time zone overlap manageable from India.</div>
+    </div>
+    <div class="company-card">
+      <div class="company-type">Top cities for on-site roles</div>
+      <div class="company-names">Bangalore (45%) · Hyderabad (20%) · Pune (15%) · Mumbai / Chennai</div>
+      <div class="company-note">Bangalore has the highest density of AI startups and the highest pay. Hyderabad has strong enterprise AI + big tech offices.</div>
+    </div>
+  </div>
+
+  <div class="section-title" id="moat">
+    <h2>Your Actual Moat</h2>
+    <span class="section-tag">how to win the role</span>
+  </div>
+
+  <div class="moat-box">
+    <div class="moat-label">// the thing most AI engineers can't do</div>
+    <p>"Most AI engineers <strong>can ship but can't measure</strong>. Your DS background is the rare ability to bring rigorous experimentation, eval pipelines, and statistical thinking to a team that builds fast but often can't tell if it's working. <strong>Be the person who ships AND measures.</strong>"</p>
+  </div>
+
+  <p style="margin-bottom: 16px; color: var(--ink-muted); font-style: italic;">How to signal this in your portfolio:</p>
+
+  <div class="concept-row">
+    <div class="row-num">1</div>
+    <div class="row-name">Build with eval rigor</div>
+    <div class="row-why">Every project you build should have an eval pipeline. LLM-as-judge + human spot-check + regression suite. Show you don't just demo — you measure.</div>
+  </div>
+  <div class="concept-row">
+    <div class="row-num">2</div>
+    <div class="row-name">End-to-end agent project</div>
+    <div class="row-why">Working agent with tools, failure handling, and an eval harness. LangGraph or raw API + tool loop. Show the full stack, not just the model call.</div>
+  </div>
+  <div class="concept-row">
+    <div class="row-num">3</div>
+    <div class="row-name">Fine-tune + evaluate</div>
+    <div class="row-why">QLoRA fine-tune LLaMA 3 8B on a domain task. Evaluate with DPO preference pairs. Shows you can improve a model, not just call an API.</div>
+  </div>
+  <div class="concept-row">
+    <div class="row-num">4</div>
+    <div class="row-name">RAG with real retrieval metrics</div>
+    <div class="row-why">Build RAG and measure retrieval recall, context precision, answer faithfulness (RAGAS framework). Most RAG demos have no eval — yours will stand out.</div>
+  </div>
+  <div class="concept-row" style="border-bottom: 1px solid var(--border);">
+    <div class="row-num">5</div>
+    <div class="row-name">Write about what you build</div>
+    <div class="row-why">A blog post or LinkedIn writeup on each project. Fast-growing startups hire people with visible thinking. 1 strong writeup = 10 applications worth of signal.</div>
+  </div>
+
+  <div class="callout green" style="margin-top: 28px;">
+    <div class="callout-label">Timeline estimate</div>
+    <p>Research suggests 6–9 months for a full DS → AI Engineer transition. With a DS background you can cut this to <strong>3–4 months</strong> focused on Priority 1 concepts + building 3 portfolio projects: RAG system, fine-tuned model, working agent. The concepts aren't the bottleneck — the shipped projects are.</p>
+  </div>
+
+</main>
+
+<footer>
+  <span>// DS → AI Engineer Career Research · India · 2025–2026</span>
+  <span>// based on Instahyre, Tredence, HuntingCube, Medium/DSC market data</span>
+</footer>
+
+</body>
+</html>

@@ -20,7 +20,7 @@ def load_hotpotqa_subset(n: int = 200) -> list[BenchmarkSample]:
     Gold-standard multi-hop QA. Enables direct comparison with published RAG papers.
     Uses its own Wikipedia corpus — benchmarks retrieval component in isolation.
     """
-    ds = load_dataset("hotpot_qa", "fullwiki", split="validation")
+    ds = load_dataset("hotpotqa/hotpot_qa", "fullwiki", split="validation")
     samples = []
     for row in ds.select(range(min(n, len(ds)))):
         support = []

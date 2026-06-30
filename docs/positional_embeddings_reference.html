@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Positional Embeddings & RoPE — Complete Reference</title>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+  body { font-family: Georgia, serif; max-width: 860px; margin: 40px auto; padding: 0 20px; line-height: 1.7; color: #1a1a1a; }
+  h1 { border-bottom: 3px solid #1a1a1a; padding-bottom: 10px; }
+  h2 { border-bottom: 1px solid #ccc; margin-top: 48px; }
+  h3 { margin-top: 32px; color: #333; }
+  .definition { background: #e8f0fe; border-left: 4px solid #1a73e8; padding: 12px 16px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+  .theorem { background: #e6f4ea; border-left: 4px solid #137333; padding: 12px 16px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+  .proof-toggle { background: #f1f3f4; border-left: 4px solid #888; padding: 12px 16px; margin: 8px 0; border-radius: 0 6px 6px 0; cursor: pointer; }
+  .proof-body { display: none; background: #fafafa; border-left: 4px solid #aaa; padding: 12px 16px; margin: 0 0 16px 0; }
+  .proof-body.open { display: block; }
+  .keyfacts { background: #fff8e1; border-left: 4px solid #f9ab00; padding: 12px 16px; margin: 24px 0; border-radius: 0 6px 6px 0; }
+  .keyfacts ul { margin: 4px 0; }
+  .warn { background: #fce8e6; border-left: 4px solid #c5221f; padding: 12px 16px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+  code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+  .algo { background: #f8f8f8; border: 1px solid #ddd; padding: 16px; font-family: monospace; white-space: pre; border-radius: 6px; line-height: 1.5; overflow-x: auto; }
+  nav { position: sticky; top: 0; background: white; padding: 8px 0; border-bottom: 1px solid #eee; margin-bottom: 32px; }
+  nav a { margin-right: 16px; color: #1a73e8; text-decoration: none; font-size: 0.9em; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+  th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; font-size: 0.95em; }
+  th { background: #f4f4f4; }
+</style>
+<script>
+function toggleProof(id) {
+  const el = document.getElementById(id);
+  el.classList.toggle('open');
+  const btn = el.previousElementSibling;
+  btn.textContent = el.classList.contains('open') ? '▼ Proof (click to collapse)' : '▶ Proof (click to expand)';
+}
+</script>
+</head>
+<body>
+
+<h1>Positional Embeddings & RoPE — Complete Reference</h1>
+<p><em>Companion to <code>notebooks/positional_embeddings_tutorial.ipynb</code>. Keep both open side by side.</em></p>
+<p><em>Primary sources (in <code>docs/positional_embeddings/papers/</code>): Vaswani et al., "Attention Is All You Need," NeurIPS 2017 (<a href="https://arxiv.org/abs/1706.03762">1706.03762</a>); Su et al., "RoFormer: Enhanced Transformer with Rotary Position Embedding," 2021 (<a href="https://arxiv.org/abs/2104.09864">2104.09864</a>); Chen et al., "Extending Context Window of LLMs via Position Interpolation," 2023 (<a href="https://arxiv.org/abs/2306.15595">2306.15595</a>); Peng et al., "YaRN," 2023 (<a href="https://arxiv.org/abs/2309.00071">2309.00071</a>).</em></p>
+
+<nav>
+  <a href="#s1">1. Why Position</a>
+  <a href="#s2">2. Sinusoidal</a>
+  <a href="#s3">3. Absolute vs Relative</a>
+  <a href="#s4">4. RoPE Derivation</a>
+  <a href="#s5">5. Properties</a>
+  <a href="#s6">6. Context Extension</a>
+  <a href="#s7">7. Experiments</a>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1">1. Why Attention Needs Position At All</h2>
+
+<p>Self-attention computes, for a sequence of token vectors stacked as rows of \(X \in \mathbb{R}^{n \times d}\),</p>
+<p>\[\text{Attn}(X) = \text{softmax}\!\left(\frac{QK^\top}{\sqrt{d}}\right)V, \quad Q = XW_Q,\; K = XW_K,\; V = XW_V.\]</p>
+
+<p>This operation is <strong>permutation-equivariant</strong>: if \(P\) is any permutation matrix, then \(\text{Attn}(PX) = P\,\text{Attn}(X)\). Permuting the input tokens permutes the outputs the same way — but the <em>content</em> of each output is unchanged. The attention weight between positions \(i\) and \(j\) depends only on the token vectors \(x_i, x_j\), never on \(i\), \(j\), or \(i-j\).</p>
+
+<div class="theorem">
+<strong>Consequence:</strong> Without positional information, a transformer sees a <em>bag of tokens</em>. "the dog bit the man" and "the man bit the dog" produce the same set of representations. Word order — which carries most of the meaning in language — is invisible.
+</div>
+
+<div class="proof-toggle" onclick="toggleProof('proof-equivariance')">▶ Proof (click to expand)</div>
+<div class="proof-body" id="proof-equivariance">
+<p>For a permutation matrix \(P\) (orthogonal, \(P^\top P = I\)): \(Q' = PXW_Q = PQ\), and likewise \(K' = PK\), \(V' = PV\). Then the score matrix is</p>
+<p>\[Q'K'^\top = PQ(PK)^\top = PQK^\top P^\top.\]</p>
+<p>Softmax is applied row-wise, and \(P(\cdot)P^\top\) permutes rows and columns identically, so \(\text{softmax}(PQK^\top P^\top/\sqrt d) = P\,\text{softmax}(QK^\top/\sqrt d)\,P^\top\). Multiplying by \(V' = PV\):</p>
+<p>\[P\,\text{softmax}(\cdot)\,P^\top PV = P\,\text{softmax}(\cdot)\,V = P\,\text{Attn}(X). \;\blacksquare\]</p>
+</div>
+
+<p>The fix is to make token representations (or the attention scores) <em>depend on position</em>. There are two broad strategies, and RoPE is the modern winner of the second:</p>
+<ul>
+  <li><strong>Add</strong> a position signal to the input embeddings (sinusoidal, learned absolute).</li>
+  <li><strong>Modify the attention score</strong> so it depends on relative position (relative bias, and — multiplicatively — RoPE).</li>
+</ul>
+
+<div class="keyfacts">
+<strong>Key Facts — Section 1</strong>
+<ul>
+  <li>Self-attention is permutation-equivariant: order is invisible without added position info.</li>
+  <li>Attention weights depend only on token content unless we inject position.</li>
+  <li>Two families: inject at the input (sinusoidal/learned) vs. inject into the score (relative/RoPE).</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2">2. Sinusoidal Positional Encoding (Vaswani 2017)</h2>
+
+<p>The original transformer adds a fixed, non-learned vector \(PE(pos) \in \mathbb{R}^d\) to each token embedding before layer 1. For position \(pos\) and dimension index \(i \in \{0,\dots,d/2-1\}\):</p>
+
+<div class="definition">
+<strong>Sinusoidal PE:</strong>
+\[PE(pos, 2i) = \sin\!\left(\frac{pos}{10000^{2i/d}}\right), \qquad PE(pos, 2i+1) = \cos\!\left(\frac{pos}{10000^{2i/d}}\right).\]
+The input to the network is \(x_{pos} = \text{TokenEmb}(pos) + PE(pos)\).
+</div>
+
+<p>Each pair of dimensions \((2i, 2i+1)\) is a sine/cosine of angular frequency \(\omega_i = 10000^{-2i/d}\). The wavelengths form a <strong>geometric progression</strong> from \(2\pi\) (fast, \(i=0\)) to \(10000 \cdot 2\pi\) (slow, \(i=d/2-1\)). This is essentially a continuous, multi-resolution analog of binary counting: high-frequency dims flip quickly, low-frequency dims encode coarse position.</p>
+
+<h3>The relative-position hint</h3>
+<p>Sinusoids were chosen because a shift by a fixed offset \(k\) is a <em>linear</em> (rotation) transform of the encoding, independent of \(pos\):</p>
+<p>\[\begin{pmatrix} \sin\omega_i(pos+k) \\ \cos\omega_i(pos+k) \end{pmatrix} = \underbrace{\begin{pmatrix} \cos\omega_i k & \sin\omega_i k \\ -\sin\omega_i k & \cos\omega_i k \end{pmatrix}}_{\text{depends only on } k} \begin{pmatrix} \sin\omega_i\,pos \\ \cos\omega_i\,pos \end{pmatrix}.\]</p>
+<p>So in principle the model <em>can</em> learn to attend by relative distance. But the signal is <strong>added to the input</strong> and is fundamentally <strong>absolute</strong>: nothing forces the \(QK^\top\) score to be a clean function of \(m-n\). RoPE makes that property exact and structural. Hold onto this rotation matrix — RoPE is what happens when you apply it to \(Q\) and \(K\) directly instead of bolting sinusoids onto the input.</p>
+
+<div class="keyfacts">
+<strong>Key Facts — Section 2</strong>
+<ul>
+  <li>\(PE(pos,2i)=\sin(pos/10000^{2i/d})\), \(PE(pos,2i+1)=\cos(\cdot)\); added to the input embedding.</li>
+  <li>Geometric wavelength ladder \(2\pi \to 10000\cdot 2\pi\): multi-resolution position code.</li>
+  <li>A position shift is a fixed rotation of the encoding — the seed of relative-position thinking.</li>
+  <li>Limitation: it is additive and absolute; relative behavior is only <em>possible</em>, not <em>guaranteed</em>.</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s3">3. Absolute vs Relative; Learned Embeddings and Their Limits</h2>
+
+<p><strong>Learned absolute</strong> embeddings (BERT, GPT-2) replace the sinusoids with a trainable table \(E_{pos} \in \mathbb{R}^{L \times d}\), one row per position up to a maximum length \(L\). Simple and effective in-distribution, but:</p>
+<ul>
+  <li><strong>Hard length ceiling.</strong> There is literally no row for position \(L\) or beyond — the model cannot run on longer sequences without new parameters.</li>
+  <li><strong>No extrapolation.</strong> Each position is learned independently; position 4097 shares no structure with 4096.</li>
+  <li><strong>Still absolute.</strong> The quantity that matters for syntax — relative distance — must be reconstructed by the network.</li>
+</ul>
+
+<p><strong>Relative position</strong> encodings (Shaw et al. 2018; Transformer-XL; T5 bias) instead inject a term that depends on \(i-j\) into the attention score, e.g. an additive bias \(b_{i-j}\) on the logit. This matches the linguistic intuition (meaning depends on distance, not absolute index) and generalizes better across lengths. The open question RoPE answers cleanly: <em>can we get exact relative-distance dependence while keeping the simple, parameter-free, dot-product structure of attention — and have it compose with efficient/linear attention?</em></p>
+
+<div class="keyfacts">
+<strong>Key Facts — Section 3</strong>
+<ul>
+  <li>Learned absolute PE: trainable per-position table, capped at \(L\), no extrapolation.</li>
+  <li>Relative PE: bias the score by \(i-j\); linguistically natural, generalizes better.</li>
+  <li>RoPE's goal: exact relative dependence, no extra parameters, plain dot products.</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s4">4. RoPE — Full Derivation</h2>
+
+<h3>4.1 The design goal</h3>
+<p>We want position-dependent maps \(f_q(x_m, m)\) and \(f_k(x_n, n)\), applied to the query at position \(m\) and the key at position \(n\), such that their inner product depends on the contents and on the <strong>relative</strong> position \(m-n\) only:</p>
+
+<div class="definition">
+<strong>RoPE desideratum:</strong> find \(f_q, f_k\) with
+\[\langle f_q(x_m, m),\, f_k(x_n, n) \rangle = g(x_m, x_n, m-n)\]
+for some function \(g\) that does not depend on \(m\) and \(n\) separately.
+</div>
+
+<h3>4.2 The 2D solution via complex numbers</h3>
+<p>Work in \(d=2\) first. Identify a 2D vector with a complex number, \((a,b) \leftrightarrow a + ib\). Multiplying by \(e^{i\theta}\) rotates by angle \(\theta\). Define</p>
+<p>\[f_q(x_m, m) = (W_q x_m)\, e^{i m \theta}, \qquad f_k(x_n, n) = (W_k x_n)\, e^{i n \theta},\]</p>
+<p>i.e. take the query/key vector and rotate it by an angle proportional to its position. The attention score is the real part of the Hermitian inner product:</p>
+<p>\[\langle f_q, f_k\rangle = \mathrm{Re}\big[(W_q x_m)\,e^{im\theta}\,\overline{(W_k x_n)\,e^{in\theta}}\big] = \mathrm{Re}\big[(W_q x_m)\overline{(W_k x_n)}\; e^{i(m-n)\theta}\big].\]</p>
+<p>The position enters <em>only</em> through \(e^{i(m-n)\theta}\). That is exactly \(g(x_m, x_n, m-n)\). \(\checkmark\)</p>
+
+<h3>4.3 Rotation-matrix form</h3>
+<p>The same map written with real matrices: rotating \(W_q x_m\) by \(m\theta\) is multiplication by the 2×2 rotation matrix</p>
+<p>\[R(m\theta) = \begin{pmatrix} \cos m\theta & -\sin m\theta \\ \sin m\theta & \cos m\theta \end{pmatrix}, \qquad f_q(x_m,m) = R(m\theta)\,W_q x_m.\]</p>
+<p>The whole construction rests on one identity of rotation matrices:</p>
+
+<div class="theorem">
+<strong>Rotation composition:</strong> \(R(\alpha)^\top R(\beta) = R(\beta - \alpha)\).
+</div>
+
+<p>Therefore the score is</p>
+<p>\[\langle f_q(x_m,m), f_k(x_n,n)\rangle = (R(m\theta)W_q x_m)^\top (R(n\theta) W_k x_n) = (W_q x_m)^\top R(m\theta)^\top R(n\theta) (W_k x_n) = (W_q x_m)^\top R\big((n-m)\theta\big)(W_k x_n).\]</p>
+<p>Relative position \(n-m\), structurally guaranteed.</p>
+
+<h3>4.4 Generalizing to \(d\) dimensions</h3>
+<p>Split the \(d\)-dim query/key into \(d/2\) consecutive 2D pairs and give pair \(i\) its own frequency, reusing the sinusoidal ladder:</p>
+<p>\[\theta_i = b^{-2i/d}, \quad i = 0, \dots, \tfrac{d}{2}-1, \qquad b = 10000 \text{ (the base)}.\]</p>
+<p>RoPE applies a block-diagonal rotation \(R_\Theta(m) = \mathrm{diag}\big(R(m\theta_0), R(m\theta_1), \dots, R(m\theta_{d/2-1})\big)\):</p>
+<div class="algo">R_Θ(m) =  ⎡ R(mθ₀)                      ⎤
+          ⎢        R(mθ₁)               ⎥      each R(mθᵢ) is a 2×2 rotation
+          ⎢               ⋱            ⎥
+          ⎣                   R(mθ_{d/2-1}) ⎦</div>
+<p>and the position-\(m\) query is \(R_\Theta(m) W_q x_m\). Because the matrix is block-diagonal, the inner product splits into a sum over pairs:</p>
+<p>\[\langle f_q(x_m,m), f_k(x_n,n)\rangle = \sum_{i=0}^{d/2-1} \big(q^{(i)}\big)^\top R\big((n-m)\theta_i\big)\, k^{(i)},\]</p>
+<p>where \(q^{(i)}, k^{(i)}\) are the \(i\)-th 2D sub-vectors of \(W_q x_m\), \(W_k x_n\). Every term depends only on \(n-m\), so the full score does too.</p>
+
+<div class="proof-toggle" onclick="toggleProof('proof-rope')">▶ Proof: score depends only on \(m-n\) (click to expand)</div>
+<div class="proof-body" id="proof-rope">
+<p>Let \(q = W_q x_m\), \(k = W_k x_n\), partitioned into 2D blocks \(q^{(i)}, k^{(i)}\). By block-diagonality,</p>
+<p>\[(R_\Theta(m) q)^\top (R_\Theta(n) k) = \sum_i (R(m\theta_i) q^{(i)})^\top (R(n\theta_i) k^{(i)}) = \sum_i (q^{(i)})^\top R(m\theta_i)^\top R(n\theta_i) k^{(i)}.\]</p>
+<p>Apply the composition identity \(R(\alpha)^\top R(\beta) = R(\beta-\alpha)\) per block:</p>
+<p>\[= \sum_i (q^{(i)})^\top R\big((n-m)\theta_i\big) k^{(i)}.\]</p>
+<p>Each summand is a function of \(q^{(i)}, k^{(i)}\) and \((n-m)\) alone; \(m\) and \(n\) never appear separately. Hence the total is \(g(x_m, x_n, m-n)\). \(\blacksquare\)</p>
+</div>
+
+<h3>4.5 Efficient implementation (the "rotate-half" trick)</h3>
+<p>You never build the \(d\times d\) matrix. Precompute \(\cos m\theta_i\) and \(\sin m\theta_i\), broadcast them across pairs, and apply rotations elementwise. With the paired layout (dims \(2i, 2i{+}1\) form pair \(i\)), rotating each pair \((x_{2i}, x_{2i+1})\) by \(m\theta_i\) is</p>
+<p>\[x'_{2i} = x_{2i}\cos m\theta_i - x_{2i+1}\sin m\theta_i, \qquad x'_{2i+1} = x_{2i}\sin m\theta_i + x_{2i+1}\cos m\theta_i.\]</p>
+<p>Vectorized, this is \(x' = x \odot \cos(m\Theta) + \text{rotate}(x) \odot \sin(m\Theta)\), where <code>rotate</code> maps \((x_{2i}, x_{2i+1}) \mapsto (-x_{2i+1}, x_{2i})\). Cost is \(O(d)\) per token and adds <strong>zero parameters</strong>. (LLaMA / GPT-NeoX use an algebraically equivalent split-half layout — first half vs second half — which is just a permutation of the pairing; the notebook implements and cross-checks the paired version.)</p>
+
+<div class="keyfacts">
+<strong>Key Facts — Section 4</strong>
+<ul>
+  <li>Goal: \(\langle f_q(x_m,m), f_k(x_n,n)\rangle = g(x_m,x_n,m-n)\).</li>
+  <li>Solution: rotate \(W_q x_m\) by \(m\theta\) (complex \(e^{im\theta}\) / real \(R(m\theta)\)).</li>
+  <li>The whole thing hinges on \(R(\alpha)^\top R(\beta) = R(\beta-\alpha)\).</li>
+  <li>\(d\)-dim: block-diagonal rotations, frequencies \(\theta_i = 10000^{-2i/d}\).</li>
+  <li>Applied to \(Q,K\) only; \(O(d)\) elementwise; no added parameters; \(V\) untouched.</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s5">5. Properties That Make RoPE Win</h2>
+
+<h3>Long-term decay</h3>
+<p>Summing rotations of geometrically-spaced frequencies, \(\sum_i (q^{(i)})^\top R((n-m)\theta_i)k^{(i)}\), behaves like a sum of cosines whose phases spread out as \(|m-n|\) grows. By an Abel-summation bound (in the RoFormer paper) the magnitude of this relative term <strong>decays</strong> as the relative distance increases. Tokens far apart interact weakly by default — a sensible inductive bias for language.</p>
+
+<h3>Why it's cheap and composable</h3>
+<ul>
+  <li><strong>No parameters, no extra layers.</strong> RoPE is a fixed function of position applied to \(Q,K\).</li>
+  <li><strong>Relative without storing a relative table.</strong> Unlike additive relative bias, there is no \(O(L)\) or \(O(L^2)\) bias to learn or store.</li>
+  <li><strong>Works with linear / efficient attention.</strong> Because RoPE multiplies \(Q\) and \(K\) before the dot product, it slots into kernels like PerFormer that never materialize \(QK^\top\). (This is exactly the Enwik8 experiment in §7.)</li>
+  <li><strong>KV-cache friendly.</strong> The rotation depends only on absolute position, so a cached key keeps its encoding; nothing needs recomputation as the sequence grows (until you start <em>rescaling</em> positions — see §6).</li>
+</ul>
+
+<div class="keyfacts">
+<strong>Key Facts — Section 5</strong>
+<ul>
+  <li>Relative attention term decays with distance — a useful built-in prior.</li>
+  <li>Zero added parameters; no relative-bias table to store.</li>
+  <li>Compatible with linear-attention kernels (multiplies Q,K, not the score matrix).</li>
+  <li>Plays well with KV caching since rotations are a function of absolute position.</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s6">6. Context Extension — Stretching RoPE Past Its Training Length</h2>
+
+<p>RoPE is relative and parameter-free, but a model trained with max length \(L\) has only ever seen relative angles \((m-n)\theta_i\) for \(|m-n| < L\). Run it on a longer sequence and the low-frequency dimensions reach angles far outside the trained range.</p>
+
+<div class="warn">
+<strong>Why naive extrapolation fails:</strong> Chen et al. show that pushing positions beyond \(L\) produces <strong>catastrophically high attention scores</strong> that "completely ruin the self-attention mechanism." Their theoretical bound: the worst-case deviation under <em>interpolation</em> is at least <strong>~600× smaller</strong> than under <em>extrapolation</em>. Extrapolation is off-distribution in the most damaging way.
+</div>
+
+<h3>Position Interpolation (PI) — Chen et al. 2023</h3>
+<p>Instead of using positions \(0,1,\dots,L'-1\) for a longer window \(L' > L\), <strong>down-scale</strong> them into the trained range:</p>
+<p>\[f'(x, m) = f\!\left(x,\; \frac{mL}{L'}\right) \quad\Longleftrightarrow\quad \theta_i \mapsto \frac{L}{L'}\theta_i.\]</p>
+<p>Now the largest relative angle the model sees is the same as during training — it is interpolating between known positions rather than extrapolating. A short fine-tune (<strong>within 1000 steps</strong>) adapts the model. PI extends LLaMA to <strong>32768</strong> tokens and even <em>reduces</em> perplexity at long context (see §7). Cost: uniform scaling compresses the high-frequency dims too, slightly hurting fine-grained local resolution.</p>
+
+<h3>NTK-aware scaling</h3>
+<p>Rather than scale all frequencies equally, change the <strong>base</strong> \(b\):</p>
+<p>\[b' = b\cdot\left(\frac{L'}{L}\right)^{\frac{d}{d-2}}.\]</p>
+<p>This leaves high-frequency dims (local detail) almost untouched and applies most of the interpolation to low-frequency dims (long-range position) — spreading the "stretch" across the spectrum by wavelength. It can extend context with little or no fine-tuning, trading a bit of long-range fidelity.</p>
+
+<h3>YaRN — Peng et al. 2023</h3>
+<p>YaRN ("Yet another RoPE extensioN") combines <strong>NTK-by-parts</strong> (don't interpolate high-frequency dims at all, fully interpolate low-frequency dims, ramp smoothly in between) with an <strong>attention temperature</strong> scaling \(1/\sqrt{t}\) on the logits to counter the entropy change from longer contexts. The headline efficiency result: it matches/beats PI with <strong>10× fewer tokens</strong> and <strong>2.5× fewer training steps</strong>, extending Llama-2 7B/13B to <strong>128k</strong>. NTK-by-parts/YaRN-style scaling is what most long-context open models ship today.</p>
+
+<table>
+<tr><th>Method</th><th>Mechanism</th><th>Fine-tune?</th><th>Trade-off</th></tr>
+<tr><td>Naive extrapolation</td><td>Use raw positions &gt; L</td><td>—</td><td>Catastrophic; attention blows up</td></tr>
+<tr><td>Position Interpolation</td><td>Scale all \(\theta_i\) by \(L/L'\)</td><td>~1000 steps</td><td>Compresses high-freq detail</td></tr>
+<tr><td>NTK-aware</td><td>Change base \(b\)</td><td>little / none</td><td>Some long-range fidelity loss</td></tr>
+<tr><td>YaRN</td><td>NTK-by-parts + attn temperature</td><td>10× / 2.5× less</td><td>More moving parts; SOTA results</td></tr>
+</table>
+
+<div class="keyfacts">
+<strong>Key Facts — Section 6</strong>
+<ul>
+  <li>Vanilla RoPE does not extrapolate: out-of-range angles cause catastrophic attention.</li>
+  <li>PI down-scales positions (\(m \to mL/L'\)) into the trained range; ~1000 steps fine-tune; reaches 32k.</li>
+  <li>NTK-aware changes the base \(b\) so high-freq dims survive; PI's uniform scaling does not.</li>
+  <li>YaRN = NTK-by-parts + attention temperature; Llama-2 → 128k with 10×/2.5× less training.</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s7">7. Experiment Design & Empirical Evidence</h2>
+
+<p>This is the part that matters for the "ship <em>and</em> measure" mindset: not just that RoPE is elegant, but how each paper <em>designed an experiment to prove it works</em>, and what the numbers were.</p>
+
+<h3>7.1 RoFormer (Su et al.) — does RoPE beat sinusoidal/learned PE?</h3>
+<p><strong>Design.</strong> Three complementary tests, each isolating one claim:</p>
+<ul>
+  <li><strong>Machine translation (capability):</strong> WMT 2014 English→German, RoFormer vs the original Transformer-base. Metric: BLEU. <em>Result:</em> <strong>27.3 → 27.5 BLEU.</strong></li>
+  <li><strong>Pre-training convergence (optimization):</strong> swap BERT's learned absolute PE for RoPE, train both with identical setup (batch 64, seq len 512, 100k steps, AdamW). Metric: masked-LM loss curve. <em>Result:</em> RoFormer shows <strong>faster convergence</strong> (lower MLM loss throughout).</li>
+  <li><strong>Downstream transfer:</strong> fine-tune the pre-trained model on <strong>GLUE</strong> tasks. <em>Result:</em> RoFormer outperforms the BERT baseline on several tasks.</li>
+  <li><strong>Composability (the unique selling point):</strong> plug RoPE into <strong>PerFormer</strong> (linear attention) and train a 12-layer char-level LM on <strong>Enwik8</strong>. Metric: LM loss. <em>Result:</em> RoPE gives lower loss and faster convergence — and crucially <em>works at all</em> with linear attention, which additive relative-bias schemes cannot easily do.</li>
+</ul>
+<p>The experimental logic: separate <em>final capability</em> (BLEU/GLUE) from <em>optimization behavior</em> (loss curves) from <em>architectural reach</em> (linear attention). Each addresses a different reason one might doubt the method.</p>
+
+<h3>7.2 Position Interpolation (Chen et al.) — does context extension actually work?</h3>
+<p><strong>Design.</strong> Extend pre-trained LLaMA 7B–65B, fine-tune ≤1000 steps, then evaluate on three axes:</p>
+<ul>
+  <li><strong>Perplexity vs context length</strong> on long-text corpora (PG-19, proof-pile), sliding window. <em>Result:</em> extending 7B from 2048→16384 <strong>reduces</strong> perplexity by <strong>−0.28 / −0.5</strong> on the two datasets (similar gains for 13B/33B; 65B to 8192 gives −0.12/−0.3). Perplexity degrades <em>gracefully</em> as the window grows — the model genuinely uses the extra context.</li>
+  <li><strong>Passkey retrieval</strong> (a targeted probe): hide a random number deep in a long context and ask for it. This isolates "can it attend across the full window," which perplexity can mask. <em>Result:</em> PI-extended models retrieve; naive-extrapolation models fail.</li>
+  <li><strong>Within-window quality preservation:</strong> check the extended model didn't regress on tasks inside the original 2048 window. <em>Result:</em> preserved relatively well.</li>
+</ul>
+
+<h3>7.3 YaRN (Peng et al.) — can we do it cheaper?</h3>
+<p><strong>Design.</strong> Same evaluation protocol as PI (long-context perplexity + passkey), but the metric of interest is <em>training efficiency</em> at equal/better quality. <em>Result:</em> matches/exceeds PI with <strong>10× fewer tokens</strong> and <strong>2.5× fewer steps</strong>; extends Llama-2 7B/13B to <strong>128k</strong>.</p>
+
+<h3>7.4 Reading these results with a DS eye</h3>
+<div class="warn">
+<strong>What to trust, what to probe:</strong>
+<ul>
+  <li><strong>Perplexity is necessary, not sufficient.</strong> A model can have low perplexity on long text by leaning on local context while ignoring far tokens. That's why PI/YaRN pair it with <strong>passkey retrieval</strong> — a direct test of long-range access. Always pair an aggregate metric with a targeted probe.</li>
+  <li><strong>Watch the evaluation length.</strong> "Perplexity went down" is only meaningful relative to the context window it was measured at; compare like-for-like windows.</li>
+  <li><strong>Check for in-distribution regression.</strong> Extension can quietly hurt short-context quality — PI explicitly measured this. A win on long context that breaks the common case is not a win.</li>
+  <li><strong>BLEU 27.3→27.5 is a small delta.</strong> RoFormer's stronger evidence is the convergence curves and the linear-attention compatibility, not the BLEU point estimate. Weigh effect sizes, not just direction.</li>
+</ul>
+</div>
+
+<table>
+<tr><th>Claim</th><th>Paper</th><th>Experiment</th><th>Headline number</th></tr>
+<tr><td>RoPE ≥ baseline on capability</td><td>RoFormer</td><td>WMT14 En→De</td><td>BLEU 27.3 → 27.5</td></tr>
+<tr><td>RoPE optimizes faster</td><td>RoFormer</td><td>BERT-vs-RoFormer MLM</td><td>Lower MLM loss throughout</td></tr>
+<tr><td>RoPE works with linear attention</td><td>RoFormer</td><td>PerFormer + Enwik8</td><td>Lower char-LM loss</td></tr>
+<tr><td>RoPE context is extendable</td><td>PI</td><td>LLaMA + long-text PPL</td><td>32k; 7B PPL −0.28/−0.5</td></tr>
+<tr><td>Extension is real, not cosmetic</td><td>PI</td><td>Passkey retrieval</td><td>PI passes; extrapolation fails</td></tr>
+<tr><td>Extension can be cheap</td><td>YaRN</td><td>Same protocol, less compute</td><td>128k; 10× tokens, 2.5× steps</td></tr>
+</table>
+
+<div class="keyfacts">
+<strong>Key Facts — Section 7</strong>
+<ul>
+  <li>RoFormer proves three separate things with three experiments: capability (BLEU), optimization (loss curves), reach (linear attention).</li>
+  <li>PI proves extension works with PPL-vs-length <em>and</em> passkey retrieval — aggregate + targeted probe.</li>
+  <li>YaRN proves the same quality is reachable far more cheaply (10× tokens, 2.5× steps; 128k).</li>
+  <li>DS lens: pair aggregate metrics with targeted probes, match evaluation lengths, check for in-distribution regression, weigh effect sizes.</li>
+</ul>
+</div>
+
+</body>
+</html>
