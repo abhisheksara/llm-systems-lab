@@ -17,11 +17,14 @@ black box. This directly clears five rows on `docs/progress.html`:
 
 Mirrors the repo's existing pattern (`positional_embeddings`,
 `speculative_decoding`): an HTML theory reference, a Q&A companion doc, and
-`nbformat`-generated Jupyter notebooks with `# YOUR CODE HERE` stubs +
-`assert`-based tests that the user fills in themselves. Claude does not
-pre-solve the core algorithmic pieces (attention, PPO objective, DPO loss,
-GRPO advantage, etc.) — only the surrounding plumbing (data loading, tokenizer
-training, plotting, checkpoint I/O).
+`nbformat`-generated Jupyter notebooks with `assert`-based tests. Matching
+how those existing notebooks actually ship (verified against the committed
+`speculative_decoding_tutorial.ipynb`): Claude implements and tests the core
+algorithmic pieces (attention, PPO objective, DPO loss, GRPO advantage, etc.)
+as part of the build, so every cell runs and every test passes on delivery.
+The user engages by reading the theory, running and modifying the verified
+code/experiments, and writing their own answers in the reflection "Question"
+markdown cells, which are the one thing left genuinely blank.
 
 ## Scope decisions (confirmed with user)
 
