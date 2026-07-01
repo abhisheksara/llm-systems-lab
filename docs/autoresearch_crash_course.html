@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoResearch — A Crash Course in Autonomous Research Harnesses</title>
+<script>
+  MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['$$','$$']] } };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:          #faf8f4;
+    --surface:     #ffffff;
+    --surface-2:   #f1ede5;
+    --border:      #e3ddd3;
+    --ink:         #1b1815;
+    --ink-soft:    #4a443c;
+    --ink-muted:   #7a7268;
+    --ink-faint:   #aaa298;
+    --accent:      #b5470f;   /* burnt orange */
+    --accent-soft: #fbeee6;
+    --green:       #1a6b3a;
+    --green-soft:  #ecf6f0;
+    --red:         #b3261e;
+    --red-soft:    #fbedec;
+    --blue:        #1a3f7a;
+    --blue-soft:   #eef2fb;
+    --amber:       #9a6b08;
+    --amber-soft:  #fcf6e8;
+    --code-bg:     #1d1b18;
+    --code-ink:    #e9e4da;
+  }
+
+  * , *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Lora', serif;
+    font-size: 16px;
+    line-height: 1.72;
+  }
+
+  /* ---------- layout ---------- */
+  .wrap { display: grid; grid-template-columns: 260px 1fr; max-width: 1180px; margin: 0 auto; }
+
+  aside {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 36px 22px 60px 32px;
+    border-right: 1px solid var(--border);
+    background: var(--bg);
+  }
+  aside .brand {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 17px;
+    letter-spacing: -0.01em;
+    margin-bottom: 4px;
+  }
+  aside .brand .dot { color: var(--accent); }
+  aside .brand-sub {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 26px;
+  }
+  aside nav a {
+    display: block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-muted);
+    text-decoration: none;
+    padding: 5px 0 5px 12px;
+    border-left: 2px solid transparent;
+    transition: color .15s, border-color .15s;
+    line-height: 1.5;
+  }
+  aside nav a:hover { color: var(--accent); border-left-color: var(--accent); }
+  aside nav a.part {
+    margin-top: 16px;
+    color: var(--ink);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 10.5px;
+    border-left-color: var(--border);
+  }
+  aside nav a.part:first-of-type { margin-top: 0; }
+
+  main { padding: 0 0 120px; min-width: 0; }
+
+  /* ---------- hero ---------- */
+  header.hero {
+    background: var(--ink);
+    color: #f7f4ef;
+    padding: 60px 52px 50px;
+    margin-bottom: 8px;
+    position: relative;
+    overflow: hidden;
+  }
+  header.hero::after {
+    content:'';
+    position:absolute; right:-60px; top:-60px;
+    width: 300px; height: 300px;
+    background: radial-gradient(circle, rgba(181,71,15,0.30), transparent 70%);
+  }
+  .hero-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: rgba(247,244,239,0.55); margin-bottom: 18px;
+  }
+  header.hero h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(30px, 4vw, 46px);
+    font-weight: 800; line-height: 1.06; letter-spacing: -0.02em;
+    margin-bottom: 18px; position: relative; z-index: 1;
+  }
+  header.hero h1 span { color: #f0913f; }
+  .hero-sub {
+    font-size: 16px; font-style: italic; color: rgba(247,244,239,0.72);
+    max-width: 620px; position: relative; z-index: 1;
+  }
+  .hero-meta {
+    margin-top: 26px; display: flex; flex-wrap: wrap; gap: 8px;
+    position: relative; z-index: 1;
+  }
+  .hero-meta span {
+    font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.08em;
+    padding: 5px 11px; border: 1px solid rgba(247,244,239,0.22); border-radius: 2px;
+    color: rgba(247,244,239,0.72);
+  }
+
+  .content { padding: 0 52px; }
+
+  /* ---------- typography ---------- */
+  .part-divider {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--accent); margin: 64px 0 6px; font-weight: 600;
+  }
+  h2 {
+    font-family: 'Syne', sans-serif; font-weight: 700;
+    font-size: 26px; letter-spacing: -0.01em; line-height: 1.2;
+    margin: 8px 0 18px; padding-bottom: 12px; border-bottom: 2px solid var(--ink);
+  }
+  h3 {
+    font-family: 'Syne', sans-serif; font-weight: 600;
+    font-size: 19px; margin: 36px 0 12px; color: var(--ink);
+  }
+  h4 {
+    font-family: 'IBM Plex Mono', monospace; font-weight: 600;
+    font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--ink-soft); margin: 26px 0 8px;
+  }
+  p { margin: 14px 0; }
+  a { color: var(--accent); }
+  strong { font-weight: 600; color: var(--ink); }
+  em { color: var(--ink-soft); }
+  ul, ol { margin: 14px 0 14px 26px; }
+  li { margin: 7px 0; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+
+  code {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.86em;
+    background: var(--surface-2); padding: 2px 6px; border-radius: 3px;
+    color: var(--accent); white-space: nowrap;
+  }
+
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 8px; overflow-x: auto;
+    margin: 18px 0; font-size: 13px; line-height: 1.6;
+    font-family: 'IBM Plex Mono', monospace;
+    border: 1px solid #2c2925;
+  }
+  pre code { background: none; color: inherit; padding: 0; white-space: pre; font-size: inherit; }
+  pre .c  { color: #8a8478; font-style: italic; }   /* comment */
+  pre .k  { color: #e0843c; }                         /* keyword */
+  pre .s  { color: #9ccb6a; }                         /* string  */
+  pre .n  { color: #6fb3d2; }                         /* number/ident accent */
+  pre .f  { color: #d9b15c; }                         /* function */
+  pre .hl { color: #f0913f; font-weight: 600; }       /* highlight */
+
+  /* ---------- callouts ---------- */
+  .box {
+    border-left: 4px solid var(--ink); background: var(--surface);
+    padding: 16px 20px; margin: 22px 0; border-radius: 0 6px 6px 0;
+  }
+  .box .label {
+    font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--ink-muted); margin-bottom: 6px; font-weight: 600;
+  }
+  .box p:first-of-type { margin-top: 0; }
+  .box p:last-child { margin-bottom: 0; }
+  .box.transfer { border-color: var(--accent); background: var(--accent-soft); }
+  .box.transfer .label { color: var(--accent); }
+  .box.warn { border-color: var(--red); background: var(--red-soft); }
+  .box.warn .label { color: var(--red); }
+  .box.key  { border-color: var(--green); background: var(--green-soft); }
+  .box.key .label { color: var(--green); }
+  .box.note { border-color: var(--blue); background: var(--blue-soft); }
+  .box.note .label { color: var(--blue); }
+  .box.try  { border-color: var(--amber); background: var(--amber-soft); }
+  .box.try .label { color: var(--amber); }
+
+  /* ---------- tables ---------- */
+  table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; }
+  th {
+    font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint);
+    text-align: left; padding: 10px 13px; background: var(--surface-2);
+    border: 1px solid var(--border); font-weight: 500;
+  }
+  td { padding: 11px 13px; border: 1px solid var(--border); vertical-align: top;
+       background: var(--surface); line-height: 1.55; }
+  td code { white-space: normal; }
+
+  /* ---------- anatomy diagram ---------- */
+  .anatomy { margin: 28px 0; }
+  .anatomy-row { display: grid; grid-template-columns: 150px 1fr; gap: 14px; margin-bottom: 12px; align-items: stretch; }
+  .anatomy-tag {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 12px 14px; border-radius: 6px; color: #fff; line-height: 1.3;
+  }
+  .anatomy-tag small { font-weight: 400; opacity: .8; font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; margin-top: 3px; }
+  .t-immut { background: #5a5048; }
+  .t-mut   { background: var(--accent); }
+  .t-spec  { background: var(--blue); }
+  .t-metric{ background: var(--green); }
+  .t-loop  { background: var(--ink); }
+  .anatomy-desc { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; font-size: 14px; display: flex; align-items: center; }
+  .anatomy-desc code { white-space: normal; }
+
+  /* loop steps */
+  .loop { counter-reset: step; margin: 20px 0; }
+  .loop .step {
+    display: grid; grid-template-columns: 34px 1fr; gap: 14px; margin-bottom: 10px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px;
+  }
+  .loop .step::before {
+    counter-increment: step; content: counter(step);
+    font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 13px;
+    width: 30px; height: 30px; border-radius: 50%; background: var(--ink); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .loop .step.keep::before { background: var(--green); }
+  .loop .step.discard::before { background: var(--red); }
+  .loop .step div { font-size: 14px; align-self: center; }
+
+  footer {
+    background: var(--ink); color: rgba(247,244,239,0.5);
+    padding: 26px 52px; font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+    margin-top: 60px; line-height: 1.7;
+  }
+  footer a { color: #f0913f; }
+
+  .toc-progress { font-size: 11px; }
+
+  @media (max-width: 860px) {
+    .wrap { grid-template-columns: 1fr; }
+    aside { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    aside nav { columns: 2; }
+    .content, header.hero, footer { padding-left: 22px; padding-right: 22px; }
+    .anatomy-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ============ SIDEBAR ============ -->
+<aside>
+  <div class="brand">auto<span class="dot">·</span>research</div>
+  <div class="brand-sub">Crash Course</div>
+  <nav>
+    <a class="part" href="#p1">I · The Big Idea</a>
+    <a href="#what">What it is</a>
+    <a href="#mental">The mental model</a>
+
+    <a class="part" href="#p2">II · Harness Anatomy</a>
+    <a href="#five-parts">The five parts</a>
+    <a href="#why-split">Why the split matters</a>
+
+    <a class="part" href="#p3">III · File by File</a>
+    <a href="#prepare">prepare.py — substrate</a>
+    <a href="#train">train.py — surface</a>
+    <a href="#program">program.md — the spec</a>
+    <a href="#results">results.tsv + analysis</a>
+
+    <a class="part" href="#p4">IV · The Loop</a>
+    <a href="#loop-steps">The loop, step by step</a>
+    <a href="#git-state">Git as a state machine</a>
+    <a href="#never-stop">Autonomy &amp; context hygiene</a>
+
+    <a class="part" href="#p5">V · The Metric</a>
+    <a href="#bpb">val_bpb explained</a>
+    <a href="#immutable-eval">The immutable-eval keystone</a>
+
+    <a class="part" href="#p6">VI · Design Principles</a>
+    <a href="#principles">The four design choices</a>
+
+    <a class="part" href="#p7">VII · Guardrails</a>
+    <a href="#goodhart">Goodhart &amp; metric gaming</a>
+    <a href="#weakness">Where it's still weak</a>
+
+    <a class="part" href="#p8">VIII · Run It</a>
+    <a href="#setup">Setup</a>
+    <a href="#small">Tuning for small compute</a>
+
+    <a class="part" href="#p9">IX · Your Own Problem</a>
+    <a href="#recipe">The generalization recipe</a>
+    <a href="#rag-example">Worked example: RAG</a>
+    <a href="#rag-program">A program.md for RAG</a>
+
+    <a class="part" href="#p10">X · Reference</a>
+    <a href="#checklist">Design checklist</a>
+    <a href="#career">Career &amp; curriculum tie-in</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</aside>
+
+<!-- ============ MAIN ============ -->
+<main>
+<header class="hero">
+  <div class="hero-tag">// LLM Systems Lab · Companion to <code style="color:inherit;background:rgba(255,255,255,0.1)">/autoresearch</code></div>
+  <h1>Autonomous Research <span>Harnesses</span>,<br>Taught Through AutoResearch</h1>
+  <p class="hero-sub">Karpathy's autoresearch is 1,000 lines that let an AI agent improve a model overnight. Stripped of the GPU specifics, it's a reusable blueprint for any "propose → run → measure → keep-or-discard" loop. This course teaches the blueprint — then shows you how to point it at your own research problem.</p>
+  <div class="hero-meta">
+    <span>~45 min read</span>
+    <span>Repo: ../autoresearch/</span>
+    <span>Goal: design + run your own loop</span>
+  </div>
+</header>
+
+<div class="content">
+
+<!-- ===================== PART I ===================== -->
+<div class="part-divider" id="p1">Part I</div>
+<h2>The Big Idea</h2>
+
+<h3 id="what">What AutoResearch actually is</h3>
+<p><a href="https://github.com/karpathy/autoresearch">AutoResearch</a> (Andrej Karpathy, March 2026) is a deliberately tiny harness that hands an AI coding agent a real-but-small LLM training setup and tells it: <em>experiment on your own, overnight, and only keep what measurably helps.</em> You describe research directions in plain English, point a coding agent (Claude Code, Codex, etc.) at the repo, disable its permission prompts, and walk away. You wake up to a log of ~100 experiments and, hopefully, a better model.</p>
+
+<p>The headline result: on a setup Karpathy had already hand-tuned over years, the agent ran ~700 changes autonomously, found ~20 that genuinely helped, and stacking them gave an <strong>~11% efficiency gain</strong>. Shopify's CEO adapted the same pattern overnight and got a 0.8B model beating his hand-tuned 1.6B baseline.</p>
+
+<div class="box note">
+  <div class="label">The point of this course</div>
+  <p>You are <em>not</em> here to learn GPT pretraining (that's the <em>payload</em> — and it's curriculum item #3, "skip unless joining a foundation-model lab"). You're here for the <strong>harness</strong>: the loop, the metric, the spec file, and the guardrails. That structure is provider-, domain-, and task-agnostic. Master it once and you can wrap it around RAG tuning, prompt optimization, agent-policy search, feature engineering — anything with a number to push.</p>
+</div>
+
+<h3 id="mental">The mental model: hill-climbing with an LLM as the proposal engine</h3>
+<p>Every optimization loop has the same skeleton: <em>propose a change → evaluate it → accept or reject → repeat.</em> Classical methods (grid search, Bayesian optimization, evolutionary search) differ only in <strong>how they propose</strong> the next candidate. AutoResearch's insight is to make the proposal engine an <strong>LLM agent reading code and papers</strong>:</p>
+
+<table>
+  <thead><tr><th>Role in the loop</th><th>Classic optimizer</th><th>AutoResearch</th></tr></thead>
+  <tbody>
+    <tr><td>Propose next candidate</td><td>Acquisition function / mutation</td><td><strong>Agent edits <code>train.py</code></strong> using ML knowledge + prior results</td></tr>
+    <tr><td>Evaluate</td><td>Objective function</td><td>Train 5 min, compute <code>val_bpb</code></td></tr>
+    <tr><td>Accept / reject</td><td>Compare to incumbent</td><td>Lower bpb → <code>git commit</code>; else → <code>git reset</code></td></tr>
+    <tr><td>Search space</td><td>Fixed parameter vector</td><td><strong>Open-ended: any code edit</strong></td></tr>
+  </tbody>
+</table>
+
+<p>That last row is the qualitative leap. A hyperparameter sweep can only move within a box you defined in advance. An agent editing source code can change the architecture, swap the optimizer, add a regularizer it read about in a paper — an <em>unbounded</em> search space that no acquisition function can express. The price you pay for that freedom is exactly what the rest of the harness is built to control: an open-ended editor can also break the code, blow up memory, or quietly cheat the metric.</p>
+
+<!-- ===================== PART II ===================== -->
+<div class="part-divider" id="p2">Part II</div>
+<h2>The Anatomy of a Harness</h2>
+
+<p>Forget GPUs for a moment. Abstract AutoResearch and you get <strong>five parts</strong>. This decomposition is the single most transferable thing in the course — when you build your own harness, you are filling in these five slots.</p>
+
+<div class="anatomy" id="five-parts">
+  <div class="anatomy-row">
+    <div class="anatomy-tag t-immut">Immutable Substrate<small>read-only</small></div>
+    <div class="anatomy-desc">The fixed world the experiment runs in: data, the evaluation function, hard constants (time budget, sequence length). The agent <strong>cannot touch this</strong>. In the repo: <code>prepare.py</code>.</div>
+  </div>
+  <div class="anatomy-row">
+    <div class="anatomy-tag t-mut">Mutable Surface<small>agent edits this</small></div>
+    <div class="anatomy-desc">The one place the agent is allowed to change. Everything inside is fair game. Keeping it to <em>one file</em> makes diffs reviewable and scope finite. In the repo: <code>train.py</code>.</div>
+  </div>
+  <div class="anatomy-row">
+    <div class="anatomy-tag t-spec">The Spec<small>human writes this</small></div>
+    <div class="anatomy-desc">Natural-language instructions: the rules, the goal, what's allowed, how to log, when to stop. This is the program you actually write — as prose, not code. In the repo: <code>program.md</code>.</div>
+  </div>
+  <div class="anatomy-row">
+    <div class="anatomy-tag t-metric">The Metric<small>single scalar</small></div>
+    <div class="anatomy-desc">One number, lower-is-better, comparable across <em>every</em> candidate regardless of what changed. It lives <strong>inside the immutable substrate</strong> so the agent can't redefine its own grade. In the repo: <code>val_bpb</code>.</div>
+  </div>
+  <div class="anatomy-row">
+    <div class="anatomy-tag t-loop">The Loop<small>keep / discard</small></div>
+    <div class="anatomy-desc">The control flow that ties it together: propose, run, read metric, commit-or-revert, repeat forever. Implemented as agent behavior driven by the spec, with <strong>git as the accept/reject mechanism</strong>.</div>
+  </div>
+</div>
+
+<h3 id="why-split">Why the immutable / mutable split is the whole game</h3>
+<p>Notice that two of the five parts (substrate, metric) exist <em>specifically to constrain</em> the agent, and the metric deliberately lives inside the substrate. This is not incidental — it is the core safety architecture:</p>
+
+<div class="box transfer">
+  <div class="label">Transferable principle #1</div>
+  <p><strong>Separate what's measured from what's optimized, and make the measurer untouchable.</strong> If the agent that's trying to score well can also edit the scorer, it will eventually "improve" by editing the scorer — not the model. Every autonomous loop you ever build needs a bright line between <em>the surface the agent optimizes</em> and <em>the harness that judges it</em>. AutoResearch draws that line at the file level: <code>train.py</code> vs <code>prepare.py</code>.</p>
+</div>
+
+<p>As a data scientist this should feel familiar: it's the same instinct as <em>never letting the model see the test set</em>, or <em>locking the eval harness before you start tuning</em>. Most software engineers entering AI don't have that reflex — which, per your career notes, is part of your edge.</p>
+
+<!-- ===================== PART III ===================== -->
+<div class="part-divider" id="p3">Part III</div>
+<h2>File by File</h2>
+
+<p>The repo has exactly three files that matter (<code>prepare.py</code>, <code>train.py</code>, <code>program.md</code>) plus two for results (<code>results.tsv</code>, <code>analysis.ipynb</code>). Open them alongside this section.</p>
+
+<h3 id="prepare">prepare.py — the immutable substrate</h3>
+<p>Run once. It downloads data shards, trains an 8,192-token BPE tokenizer, and — critically — <strong>defines the fixed constants and the evaluation function</strong>. The agent imports from it but never edits it.</p>
+
+<pre><code><span class="c"># prepare.py — Constants (fixed, do not modify)</span>
+MAX_SEQ_LEN = <span class="n">2048</span>        <span class="c"># context length</span>
+TIME_BUDGET = <span class="n">300</span>         <span class="c"># 5-minute training budget, in seconds</span>
+EVAL_TOKENS = <span class="n">40</span> * <span class="n">524288</span> <span class="c"># tokens used for validation</span>
+
+VAL_SHARD = MAX_SHARD       <span class="c"># a PINNED validation shard — never trained on</span></code></pre>
+
+<p>Two design details worth absorbing:</p>
+<ul>
+  <li><strong>The validation shard is pinned and excluded from training</strong> (the dataloader filters it out for the <code>"train"</code> split). This is the held-out set. It's enforced in code the agent can't change, so the agent literally cannot train on the eval data even if it "wanted" to.</li>
+  <li><strong>The eval function carries a do-not-touch banner</strong> and is the sole source of truth for the metric:</li>
+</ul>
+
+<pre><code><span class="c"># Evaluation (DO NOT CHANGE — this is the fixed metric)</span>
+<span class="k">@torch.no_grad()</span>
+<span class="k">def</span> <span class="f">evaluate_bpb</span>(model, tokenizer, batch_size):
+    <span class="s">"""Bits per byte: vocab-size-independent eval metric."""</span>
+    <span class="c"># ... sums per-token cross-entropy in nats, divides by total bytes ...</span>
+    <span class="k">return</span> total_nats / (math.log(<span class="n">2</span>) * total_bytes)</code></pre>
+
+<div class="box note">
+  <div class="label">Note · enforcement is by convention here</div>
+  <p>The "do not modify" rule lives in <code>program.md</code> and a code comment — it's a <em>social</em> contract with a generally-obedient agent, not a hard filesystem lock. For higher-stakes setups, the transferable upgrade is to make it <em>structurally</em> impossible: run the eval in a separate process the agent can't edit, check the file's git hash before trusting a result, or sandbox file writes to the mutable surface only. Keep this gap in mind for Part VII.</p>
+</div>
+
+<h3 id="train">train.py — the mutable surface</h3>
+<p>This is the only file the agent edits, and <em>everything</em> in it is fair game: the GPT architecture, the Muon+AdamW optimizer, the LR schedule, batch size, model depth. The human-facing knobs sit in a clearly marked block:</p>
+
+<pre><code><span class="c"># Hyperparameters (edit these directly, no CLI flags needed)</span>
+ASPECT_RATIO     = <span class="n">64</span>        <span class="c"># model_dim = depth * ASPECT_RATIO</span>
+WINDOW_PATTERN   = <span class="s">"SSSL"</span>    <span class="c"># sliding-window attention pattern</span>
+TOTAL_BATCH_SIZE = <span class="n">2</span>**<span class="n">19</span>     <span class="c"># ~524K tokens per optimizer step</span>
+MATRIX_LR        = <span class="n">0.04</span>      <span class="c"># Muon LR for matrix params</span>
+DEPTH            = <span class="n">8</span>         <span class="c"># number of transformer layers (main size knob)</span>
+DEVICE_BATCH_SIZE= <span class="n">128</span>       <span class="c"># per-step batch (lower if OOM)</span></code></pre>
+
+<p>The training loop has one feature that's pure harness-design wisdom, independent of LLMs — it trains <strong>by wall-clock time, not by step count</strong>:</p>
+
+<pre><code><span class="k">while</span> <span class="k">True</span>:
+    <span class="c"># ... forward / backward / optimizer.step() ...</span>
+    progress = <span class="f">min</span>(total_training_time / TIME_BUDGET, <span class="n">1.0</span>)
+    <span class="c"># LR schedule, weight decay, etc. are all functions of `progress`</span>
+    <span class="k">if</span> step &gt; <span class="n">10</span> <span class="k">and</span> total_training_time &gt;= TIME_BUDGET:
+        <span class="hl">break</span>   <span class="c"># stop after exactly ~5 min of *steady-state* training</span>
+
+<span class="c"># Fast-fail guard: abort instantly if loss diverges</span>
+<span class="k">if</span> math.isnan(train_loss_f) <span class="k">or</span> train_loss_f &gt; <span class="n">100</span>:
+    <span class="f">print</span>(<span class="s">"FAIL"</span>); <span class="f">exit</span>(<span class="n">1</span>)</code></pre>
+
+<p>Why time-budget rather than a fixed number of steps? Because the agent changes model <em>size</em>. A bigger model does fewer steps per second; comparing "1000 steps of a big model" against "1000 steps of a small model" is comparing different amounts of compute. Fixing wall-clock time makes <strong>every experiment cost the same compute</strong>, so <code>val_bpb</code> measures "best model achievable in 5 minutes on this hardware" — a genuinely comparable quantity. (The flip side: results aren't comparable across <em>different</em> hardware. Accepted tradeoff.)</p>
+
+<h3 id="program">program.md — the spec (the part you actually program)</h3>
+<p>This is the heart of the harness for <em>your</em> purposes. It's a Markdown "skill" the agent reads. It has five logical sections. Here is the actual structure, condensed:</p>
+
+<pre><code><span class="hl">## Setup</span>
+1. Agree on a run tag (e.g. `mar5`); branch `autoresearch/&lt;tag&gt;` must not exist
+2. git checkout -b autoresearch/&lt;tag&gt;
+3. Read README.md, prepare.py, train.py for full context
+4. Verify data exists in ~/.cache/autoresearch/
+5. Initialize results.tsv with just the header row
+6. Confirm setup, then GO
+
+<span class="hl">## Experimentation — the rules</span>
+CAN:  modify train.py (architecture, optimizer, hyperparams, batch size...)
+CANNOT: modify prepare.py · install new packages · touch the eval harness
+GOAL: get the lowest val_bpb. Time budget is fixed, so ignore training time.
+VRAM: a soft constraint — some growth ok for real gains, don't blow up.
+SIMPLICITY: all else equal, simpler wins. A 0.001 gain from +20 hacky lines? skip.
+            A 0.001 gain from DELETING code? definitely keep.
+FIRST RUN: always establish the baseline (run train.py unchanged).
+
+<span class="hl">## Output format</span>  → script prints `val_bpb: 0.997900` etc.; grep it from run.log
+
+<span class="hl">## Logging results</span>  → append one row to results.tsv (TAB-separated):
+   commit | val_bpb | memory_gb | status(keep/discard/crash) | description
+
+<span class="hl">## The experiment loop</span>  → see Part IV</code></pre>
+
+<div class="box transfer">
+  <div class="label">Transferable principle #2</div>
+  <p><strong>The spec is your program; English is the language.</strong> Everything that makes the loop behave well — the goal, the constraints, the tie-breakers (simplicity!), the logging schema, the stopping rule — is encoded here, not in Python. Iterating on <code>program.md</code> <em>is</em> "programming your research org." This is where you'll spend your design effort when you adapt it. Note how much is value judgment, not mechanics: the simplicity criterion tells the agent how to trade quality against complexity — a policy you'd otherwise have to hard-code.</p>
+</div>
+
+<h3 id="results">results.tsv + analysis.ipynb — the experiment ledger</h3>
+<p>Every run appends one tab-separated row. It's intentionally <strong>left untracked by git</strong> (it's a log of the search, not part of the code being searched):</p>
+
+<pre><code>commit   val_bpb    memory_gb  status   description
+a1b2c3d  0.997900   44.0       keep     baseline
+b2c3d4e  0.993200   44.2       keep     increase LR to 0.04
+c3d4e5f  1.005000   44.0       discard  switch to GeLU activation
+d4e5f6g  0.000000   0.0        crash    double model width (OOM)</code></pre>
+
+<p><code>analysis.ipynb</code> then reads this ledger and computes the things you'd actually want at morning standup: the <strong>keep rate</strong> (how often a proposal stuck), the <strong>running-minimum frontier</strong> (best bpb over time), total improvement vs. baseline, and the top hits ranked by their delta. The delta for each kept experiment is measured against the <em>previous kept state</em>, because the search is cumulative — each accepted change builds on the last.</p>
+
+<div class="box key">
+  <div class="label">Why this matters more than it looks</div>
+  <p>A keep rate of, say, 3% (≈20 of 700) is not failure — it's normal for open-ended search, and it's exactly why you want an agent doing it overnight rather than a human doing it by hand. The ledger turns "the agent did stuff" into <em>measured, auditable progress</em>. When you build your own harness, design the log schema early: it's the difference between "I ran an autonomous loop" and "here is the frontier curve and the five changes that drove 80% of the gain."</p>
+</div>
+
+<!-- ===================== PART IV ===================== -->
+<div class="part-divider" id="p4">Part IV</div>
+<h2>The Loop</h2>
+
+<h3 id="loop-steps">The loop, step by step</h3>
+<p>From <code>program.md</code>'s "experiment loop" section, this is the literal control flow the agent runs <strong>forever</strong>:</p>
+
+<div class="loop">
+  <div class="step"><div>Look at git state — which branch/commit we're on (this is the current incumbent).</div></div>
+  <div class="step"><div>Edit <code>train.py</code> with one experimental idea (change the architecture, an LR, an optimizer detail…).</div></div>
+  <div class="step"><div><code>git commit</code> the change.</div></div>
+  <div class="step"><div>Run it: <code>uv run train.py &gt; run.log 2&gt;&amp;1</code> — redirect <em>all</em> output to a file (never <code>tee</code>; see below).</div></div>
+  <div class="step"><div>Read the result: <code>grep "^val_bpb:" run.log</code>.</div></div>
+  <div class="step"><div>Empty grep ⇒ it crashed. <code>tail -n 50 run.log</code> for the traceback; fix-if-trivial, else give up on this idea.</div></div>
+  <div class="step"><div>Record the row in <code>results.tsv</code> (do <em>not</em> commit the tsv).</div></div>
+  <div class="step keep"><div><strong>Improved (lower bpb)?</strong> → "advance the branch": keep the commit. The new state is the incumbent.</div></div>
+  <div class="step discard"><div><strong>Equal or worse?</strong> → <code>git reset</code> back to where you started. The change is thrown away.</div></div>
+</div>
+
+<h3 id="git-state">Git as the accept/reject state machine</h3>
+<p>There is no bespoke checkpoint manager, no experiment database, no orchestration framework. The "keep or discard" decision <em>is</em> git: commit to accept, reset to reject. The current HEAD is always the best-known configuration, and the commit history is a clean record of every accepted improvement.</p>
+
+<div class="box transfer">
+  <div class="label">Transferable principle #3</div>
+  <p><strong>Use boring, battle-tested primitives as your control plane.</strong> Git already gives you atomic accept (commit), free rollback (reset), full audit history, and branching for parallel runs (<code>autoresearch/mar5-gpu0</code>, <code>-gpu1</code>…). Reaching for a heavyweight "agent framework" here would add failure modes without buying anything. The harness is ~3 files <em>because</em> it delegates state management to git and logging to a TSV.</p>
+</div>
+
+<h3 id="never-stop">Autonomy &amp; context hygiene — the two non-obvious rules</h3>
+<p>Two instructions in <code>program.md</code> look like throwaway lines but encode hard-won agent-engineering lessons:</p>
+
+<h4>1 · "NEVER STOP"</h4>
+<p>The spec is emphatic: once the loop begins, the agent must <strong>not</strong> pause to ask "should I keep going?" or "is this a good stopping point?". The human is asleep. <em>"If you run out of ideas, think harder — read the papers referenced in the code, re-read the files for new angles, combine previous near-misses, try more radical changes. The loop runs until the human interrupts you, period."</em></p>
+<div class="box note">
+  <div class="label">Why this is here</div>
+  <p>Left to default behavior, agents are sycophantically eager to check in — which destroys the entire value proposition of "run while I sleep." Genuine autonomy means you must <em>explicitly</em> grant it and then trust your guardrails (the discard mechanism) more than the agent's judgment about whether to continue. This is the inverse of "human-in-the-loop" (curriculum #34): you're deliberately designing the human <em>out</em> of the inner loop, which is only safe because every bad proposal is cheaply reverted.</p>
+</div>
+
+<h4>2 · "Redirect everything — do NOT use tee or let output flood your context"</h4>
+<p>Training prints a fast-updating progress line every step. If that streamed into the agent's context window, a single 5-minute run could dump thousands of lines of noise, blowing the context budget and burying signal. So the output goes to <code>run.log</code>, and the agent reads back exactly two things via <code>grep</code>: the final <code>val_bpb</code> and peak VRAM. On crash, only <code>tail -n 50</code>.</p>
+<div class="box transfer">
+  <div class="label">Transferable principle #4</div>
+  <p><strong>An autonomous agent's context window is a scarce resource you must actively manage</strong> (this is curriculum #33, Context Management, learned by example). The pattern: dump verbose tool output to disk, then pull back only the minimal scalar(s) you need to make the next decision. Over 100 iterations, the difference between "grep one line" and "stream the whole log" is the difference between an agent that runs all night and one that chokes on its own output after a dozen runs.</p>
+</div>
+
+<!-- ===================== PART V ===================== -->
+<div class="part-divider" id="p5">Part V</div>
+<h2>The Metric</h2>
+
+<h3 id="bpb">val_bpb — bits per byte, and why not just "loss"</h3>
+<p>The metric is validation <strong>bits per byte</strong>: lower is better. Conceptually it's the model's cross-entropy on held-out text, but normalized <em>per UTF-8 byte</em> instead of per token:</p>
+
+$$\text{bpb} = \frac{\sum_i \text{CE}_i \;[\text{nats}]}{\ln(2)\,\cdot\,\sum_i \text{bytes}(t_i)}$$
+
+<p>The numerator sums the per-token cross-entropy (in nats); the denominator sums how many UTF-8 bytes each target token represents (special tokens, which have zero byte-length, drop out of both sums). Dividing by bytes and converting nats→bits via <code>ln(2)</code> gives bits per byte.</p>
+
+<div class="box key">
+  <div class="label">The crucial property: vocab-size independence</div>
+  <p>The agent is allowed to change the <em>tokenizer's effective behavior</em> and the model size, which changes how many tokens a given piece of text becomes. Plain "loss per token" would be unfair — a coarser tokenizer packs more bytes per token and looks artificially better. Normalizing per <em>byte</em> measures compression of the underlying text itself, so a 50M-param model and a 200M-param model with different token statistics are <strong>compared on the same footing</strong>. The metric was engineered to survive the very changes the agent is encouraged to make.</p>
+</div>
+
+<h3 id="immutable-eval">The immutable-eval keystone</h3>
+<p>We've now seen all three layers of metric protection, and they're worth stating together because <em>this is the design pattern</em> for any optimization-by-LLM loop:</p>
+<ol>
+  <li><strong>Held-out data</strong> — the validation shard is pinned and code-excluded from training. The agent can't fit the test set.</li>
+  <li><strong>Immutable scorer</strong> — <code>evaluate_bpb</code> lives in the file the agent can't edit. The agent can't redefine "good."</li>
+  <li><strong>Invariant metric</strong> — bpb is constructed to be comparable across the dimensions the agent varies. The agent can't win by exploiting an apples-to-oranges comparison.</li>
+</ol>
+<p>Strip any one of these and the loop degrades into the agent gaming its own grade. Together, they make "lowest val_bpb" a goal that can <em>only</em> be reached by actually building a better model.</p>
+
+<!-- ===================== PART VI ===================== -->
+<div class="part-divider" id="p6">Part VI</div>
+<h2>Design Principles</h2>
+
+<h3 id="principles">The four choices that define the harness</h3>
+<table>
+  <thead><tr><th>Choice</th><th>What it buys</th><th>The tradeoff</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Single mutable file</strong><br>(only <code>train.py</code>)</td>
+      <td>Scope is finite and diffs are reviewable. The agent can't wander off into refactoring the data loader or the eval.</td>
+      <td>Some ideas that would need substrate changes are off-limits by design.</td>
+    </tr>
+    <tr>
+      <td><strong>Fixed time budget</strong><br>(5 min wall-clock)</td>
+      <td>Every experiment costs equal compute ⇒ results directly comparable; also finds the best model <em>for your hardware</em> in that budget. ~12 runs/hr, ~100/night.</td>
+      <td>Results aren't comparable across different machines.</td>
+    </tr>
+    <tr>
+      <td><strong>One scalar metric</strong><br>(<code>val_bpb</code>)</td>
+      <td>Unambiguous accept/reject. No multi-objective bargaining mid-loop.</td>
+      <td>Things not in the metric (latency, robustness) are invisible unless you fold them in.</td>
+    </tr>
+    <tr>
+      <td><strong>Self-contained</strong><br>(no new deps, no distributed)</td>
+      <td>Reproducible, debuggable, one GPU / one file / one metric. Fewer moving parts to break overnight.</td>
+      <td>Caps the ceiling — no multi-node, no exotic libraries the agent might want.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="box note">
+  <div class="label">The unifying theme</div>
+  <p>Every choice trades <em>capability</em> for <em>comparability and safety</em>. That's the right trade for an unattended loop: you'd rather have 100 trustworthy, comparable experiments than 100 fast-but-incomparable ones you can't reason about in the morning. Keep this lens when you design your own — the constraints are features.</p>
+</div>
+
+<!-- ===================== PART VII ===================== -->
+<div class="part-divider" id="p7">Part VII</div>
+<h2>Guardrails &amp; Where It's Still Weak</h2>
+
+<h3 id="goodhart">Goodhart's law and metric gaming</h3>
+<p>"When a measure becomes a target, it ceases to be a good measure." An agent optimizing a single number <em>will</em> exploit any loophole in how that number is computed. AutoResearch's defenses, mapped to the attack they stop:</p>
+<table>
+  <thead><tr><th>Possible exploit</th><th>What blocks it</th></tr></thead>
+  <tbody>
+    <tr><td>Train on the validation data</td><td>Val shard pinned &amp; code-excluded from the train split (immutable substrate)</td></tr>
+    <tr><td>Edit the eval to report a lower number</td><td><code>evaluate_bpb</code> is in <code>prepare.py</code>, off-limits</td></tr>
+    <tr><td>Shrink vocab to make per-token loss look good</td><td>Metric is per-<em>byte</em>, vocab-independent</td></tr>
+    <tr><td>"Win" by overfitting a giant model</td><td>5-min budget caps how much any model can memorize</td></tr>
+    <tr><td>Add unbounded complexity for a tiny gain</td><td>Simplicity criterion in <code>program.md</code> tells the agent to reject it</td></tr>
+    <tr><td>Run forever / OOM the machine</td><td>10-min hard timeout (kill &amp; discard); VRAM soft cap; NaN fast-fail</td></tr>
+  </tbody>
+</table>
+
+<h3 id="weakness">Where the design is still weak (your DS opening)</h3>
+<div class="box warn">
+  <div class="label">The single-run noise problem</div>
+  <p>Each experiment is run <strong>once</strong>, and "improved" means the new <code>val_bpb</code> is lower — by <em>any</em> amount, including amounts smaller than run-to-run noise. With one seed and a stochastic 5-minute training run, a "0.0003 improvement" may be pure variance. Over 700 experiments you'll accept some changes that did nothing (false positives) and discard some that helped (false negatives). The original harness has no notion of statistical significance.</p>
+</div>
+<div class="box transfer">
+  <div class="label">This is exactly where your background out-engineers the reference</div>
+  <p>A statistically-literate version of the keep/discard rule would: run each promising candidate over <em>multiple seeds</em>, estimate the noise floor, and only accept a change when the improvement clears it (a paired comparison, or a simple "Δ &gt; k·σ" gate). That's a small change to the loop with an outsized credibility payoff — and a far stronger interview story than "I cloned autoresearch." Hold this thought for Part IX.</p>
+</div>
+<p>Other honest gaps: the immutable-eval rule is enforced socially (a cooperative agent), not by a sandbox; a single scalar hides regressions on anything not measured; and the agent can get stuck in local optima that a human would escape. None are fatal — they're the natural next iterations.</p>
+
+<!-- ===================== PART VIII ===================== -->
+<div class="part-divider" id="p8">Part VIII</div>
+<h2>Run It Yourself</h2>
+
+<h3 id="setup">Setup</h3>
+<p>The repo is cloned alongside this course at <code>../autoresearch/</code>. Requirements as written: a single NVIDIA GPU (tested on H100), Python 3.10+, and <a href="https://docs.astral.sh/uv/">uv</a>.</p>
+<pre><code><span class="c"># from the autoresearch/ directory</span>
+curl -LsSf https://astral.sh/uv/install.sh | sh   <span class="c"># 1. install uv (if needed)</span>
+uv sync                                            <span class="c"># 2. install deps</span>
+uv run prepare.py                                  <span class="c"># 3. download data + train tokenizer (~2 min)</span>
+uv run train.py                                    <span class="c"># 4. one manual 5-min experiment — sanity check</span></code></pre>
+<p>If that prints a <code>val_bpb:</code> line, your setup works. Then start the agent <em>in that directory</em> with permissions disabled and prompt:</p>
+<pre><code>Hi have a look at program.md and let's kick off a new experiment! let's do the setup first.</code></pre>
+
+<div class="box warn">
+  <div class="label">Reality check for your hardware</div>
+  <p>You're on a WSL2 box; you likely don't have an H100 (or any NVIDIA GPU exposed). The stock repo needs CUDA + FlashAttention-3 and <strong>will not run as-is on CPU or Apple Silicon.</strong> Two honest paths: (a) use one of the community forks linked in the README (<code>autoresearch-macos</code>, <code>-mlx</code>, <code>-win-rtx</code>, AMD) or rent a cloud H100 for an hour to see the real thing; or — far more valuable for you — (b) treat the GPU payload as <em>illustrative</em> and build the harness around a problem you can actually run locally (Part IX). The learning goal is the loop, not the kernels.</p>
+</div>
+
+<h3 id="small">Tuning the payload down for small compute</h3>
+<p>If you do run a GPU fork, the README's recipe for shrinking the model to fit smaller cards (these are <code>train.py</code>/<code>prepare.py</code> edits a fork would expose):</p>
+<table>
+  <thead><tr><th>Knob</th><th>Change</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Dataset</td><td>Switch to <a href="https://huggingface.co/datasets/karpathy/tinystories-gpt4-clean">TinyStories</a></td><td>Narrower distribution → small models give readable results</td></tr>
+    <tr><td><code>VOCAB_SIZE</code></td><td>8192 → 4096/2048/1024, or byte-level (256)</td><td>Smaller embedding/output matrices</td></tr>
+    <tr><td><code>MAX_SEQ_LEN</code></td><td>2048 → as low as 256</td><td>Quadratic attention cost drops sharply</td></tr>
+    <tr><td><code>DEPTH</code></td><td>8 → 4</td><td>Primary model-size lever (many dims derive from it)</td></tr>
+    <tr><td><code>WINDOW_PATTERN</code></td><td><code>"SSSL"</code> → <code>"L"</code></td><td>Banded attention can be inefficient at small scale</td></tr>
+    <tr><td><code>TOTAL_BATCH_SIZE</code></td><td>Lower, keep powers of 2 (e.g. 2^14)</td><td>Fit memory; tune with <code>DEVICE_BATCH_SIZE</code></td></tr>
+  </tbody>
+</table>
+
+<!-- ===================== PART IX ===================== -->
+<div class="part-divider" id="p9">Part IX</div>
+<h2>Pointing It at Your Own Research Problem</h2>
+
+<p>This is the payoff. To wrap the harness around <em>any</em> problem, fill in the five slots from Part II. Here's the recipe, then a fully worked example on the RAG pipeline you already have in this repo.</p>
+
+<h3 id="recipe">The generalization recipe</h3>
+<table>
+  <thead><tr><th>Slot</th><th>Question to answer</th><th>For a generic ML/LLM task</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Metric</strong></td><td>What single number, lower-is-better, do I trust?</td><td>Eval score from a <em>frozen</em> harness (RAGAS faithfulness, judge win-rate, accuracy, latency…)</td></tr>
+    <tr><td><strong>Immutable substrate</strong></td><td>What must the agent never touch?</td><td>The eval set, the scoring code, the test harness, hard resource/time limits</td></tr>
+    <tr><td><strong>Mutable surface</strong></td><td>What single file/config can it edit?</td><td>One config or one module: chunker params, prompt template, retriever settings, feature pipeline</td></tr>
+    <tr><td><strong>Spec</strong></td><td>What are the rules, goal, tie-breakers, log format, stop rule?</td><td>Your <code>program.md</code> — adapt the original's five sections</td></tr>
+    <tr><td><strong>Loop</strong></td><td>How is accept/reject executed?</td><td>git commit / reset, exactly as the original</td></tr>
+  </tbody>
+</table>
+
+<div class="box transfer">
+  <div class="label">The one rule that makes or breaks it</div>
+  <p><strong>Your eval must be fast, frozen, and a single scalar.</strong> If one evaluation takes an hour, you get ~8 experiments a night, not 100. If the eval set isn't frozen, the agent games it. If the metric is a vibe, the loop can't make decisions. Nail the metric first; everything else is plumbing you already understand.</p>
+</div>
+
+<h3 id="rag-example">Worked example: auto-tuning your RAG pipeline</h3>
+<p>You already have <code>src/rag/</code> with chunking, embedding, retrieval, a CrossEncoder reranker, and — crucially — an eval layer (<code>src/rag/eval/ragas_eval.py</code>, <code>judge.py</code>). That eval layer is your <code>evaluate_bpb</code>. Here's the mapping:</p>
+<table>
+  <thead><tr><th>AutoResearch</th><th>Your RAG harness</th></tr></thead>
+  <tbody>
+    <tr><td><code>prepare.py</code> (substrate)</td><td>A frozen eval set of (question, ground-truth) pairs + <code>ragas_eval.py</code>/<code>judge.py</code>, made read-only to the agent</td></tr>
+    <tr><td><code>train.py</code> (surface)</td><td>A single <code>rag_config.py</code>: chunk size/overlap, embedding model, top-k, reranker on/off, prompt template</td></tr>
+    <tr><td>5-min training run</td><td>One full pipeline run over the eval set (ingest if needed → retrieve → generate → score)</td></tr>
+    <tr><td><code>val_bpb</code></td><td>A single composite score — e.g. <code>1 − mean(faithfulness, answer_relevancy, context_precision)</code> so lower-is-better</td></tr>
+    <tr><td>git commit / reset</td><td>identical</td></tr>
+  </tbody>
+</table>
+
+<div class="box try">
+  <div class="label">Your upgrade over the reference (the DS move)</div>
+  <p>RAGAS/judge scores are <em>noisier</em> than a training loss — they depend on LLM sampling. So bake significance into the loop: evaluate each candidate over your full question set (and ideally 2–3 judge samples per answer), report mean <em>and</em> standard error, and define "improved" as <em>the new mean beating the incumbent by more than the combined standard error</em> — not just any decrease. This single change turns a noisy hill-climb into a defensible experiment, and it's the kind of rigor your career notes flag as your moat.</p>
+</div>
+
+<h3 id="rag-program">A starter program.md for the RAG harness</h3>
+<p>Drop something like this in a <code>rag-autoresearch/</code> directory and point an agent at it. It's the original's five-section skeleton, retargeted:</p>
+
+<pre><code><span class="hl"># rag-autoresearch</span>
+Autonomously tune the RAG pipeline to maximize answer quality on a frozen eval set.
+
+<span class="hl">## Setup</span>
+1. Propose a run tag (today's date). Branch `rag/&lt;tag&gt;` must not exist.
+2. git checkout -b rag/&lt;tag&gt;
+3. Read: README, rag_config.py (you edit this), eval/run_eval.py (DO NOT EDIT).
+4. Verify the frozen eval set exists at data/eval/qa_pairs.jsonl.
+5. Create results.tsv with header. First run = baseline (config unchanged).
+
+<span class="hl">## Experimentation</span>
+CAN edit: rag_config.py only — chunk_size, chunk_overlap, embedding_model,
+          top_k, use_reranker, rerank_top_n, prompt_template.
+CANNOT: edit eval/, change the eval set, swap the judge model, add deps.
+GOAL: minimize  score = 1 - mean(faithfulness, answer_relevancy, context_precision).
+BUDGET: one eval pass = the full qa_pairs set. Cost is fixed; ignore wall time.
+SIGNIFICANCE: run eval, record mean AND std error over the question set.
+   "improved" = new_mean &lt; best_mean - (se_new + se_best).   <span class="c"># beat the noise</span>
+SIMPLICITY: prefer fewer moving parts; deleting a stage for equal score = keep.
+
+<span class="hl">## Running &amp; logging</span>
+Run:  python run_eval.py --config rag_config.py &gt; run.log 2&gt;&amp;1
+Read: grep "^score:\|^score_se:" run.log     <span class="c"># keep context clean</span>
+Append to results.tsv (TAB-sep):
+  commit | score | score_se | status(keep/discard/crash) | description
+
+<span class="hl">## The loop</span>  (LOOP FOREVER, do not stop to ask)
+1. note git state  2. edit rag_config.py  3. git commit  4. run eval
+5. grep score  6. crash? tail -50, fix-or-skip  7. log row
+8. cleared the noise gate? keep commit.  9. else git reset.
+If out of ideas: re-read retrieval/reranking literature, combine near-misses,
+try more radical changes (different embedding model, hybrid search). NEVER STOP.</code></pre>
+
+<div class="box key">
+  <div class="label">What you'd learn by building this</div>
+  <p>This one project exercises three unstarted curriculum items at once — <strong>#28 ReAct</strong> (the propose→run→observe loop <em>is</em> ReAct), <strong>#30 Planning</strong> (the <code>program.md</code> spec), and <strong>#33 Context Management</strong> (grep-not-stream) — while producing exactly the portfolio artifact your career guide asks for: "an end-to-end agent project <em>with</em> an eval harness." It's days of work on infrastructure you already own, not weeks.</p>
+</div>
+
+<!-- ===================== PART X ===================== -->
+<div class="part-divider" id="p10">Part X</div>
+<h2>Reference</h2>
+
+<h3 id="checklist">Design checklist for any autonomous eval loop</h3>
+<ul>
+  <li><strong>☐ One scalar metric, lower-is-better</strong>, computed by a frozen scorer.</li>
+  <li><strong>☐ Held-out eval data</strong>, structurally excluded from anything the agent can influence.</li>
+  <li><strong>☐ Bright line</strong> between the mutable surface (what's optimized) and the immutable substrate (what judges).</li>
+  <li><strong>☐ Fixed cost per experiment</strong> (time/compute/tokens) so candidates are comparable.</li>
+  <li><strong>☐ Fast eval</strong> — aim for &gt;10 experiments/hour, or the loop isn't worth automating.</li>
+  <li><strong>☐ Cheap accept/reject</strong> — git commit/reset; no bespoke state store.</li>
+  <li><strong>☐ A logged ledger</strong> with a defined schema; analysis notebook for the frontier curve.</li>
+  <li><strong>☐ Explicit autonomy grant</strong> ("never stop") <em>plus</em> hard safety rails (timeout, resource cap, fast-fail).</li>
+  <li><strong>☐ Context hygiene</strong> — verbose output to disk, grep back only the scalar(s).</li>
+  <li><strong>☐ A tie-breaker policy</strong> (e.g. simplicity) so the agent doesn't accumulate junk for noise-level gains.</li>
+  <li><strong>☐ (Your edge) A significance gate</strong> so "improved" means "beat the noise," not "moved the number."</li>
+</ul>
+
+<h3 id="career">Career &amp; curriculum tie-in</h3>
+<p>Per your <code>llm_career_guide.html</code>, the AutoResearch <em>payload</em> (RoPE/pretraining internals) is "skip unless joining a foundation-model lab" — but the AutoResearch <em>harness</em> sits squarely on your gaps and your moat. It's a concrete instance of agent tool-use loops (a stated <span style="color:var(--red);font-weight:600">✗ Gap</span>), and its central guarantee — an immutable eval the optimizer can't game — is a <em>statistics</em> insight most SWE-background AI engineers wouldn't enforce. Building the RAG version (Part IX) is the highest-ROI move: it closes the agent-loop gap, reuses your existing eval code, and demonstrates "ships <em>and</em> measures" in one artifact.</p>
+
+<div class="box note">
+  <div class="label">Honest priority note</div>
+  <p>By the strict ranking in your guide, several <em>Priority-1 Blocking</em> items (Tool Use, ReAct, Structured Outputs, SFT, DPO, KV Cache, Quantization) still sit ahead of this. AutoResearch is a "bonus" topic you added on top. The good news: the RAG-harness project would knock out the agent-loop fundamentals (ReAct, Tool Use, Planning, Context Mgmt) as a side effect — so it's not really a detour.</p>
+</div>
+
+<h3 id="sources">Sources</h3>
+<ul>
+  <li><a href="https://github.com/karpathy/autoresearch">karpathy/autoresearch</a> — the repository (cloned at <code>../autoresearch/</code>): <code>README.md</code>, <code>program.md</code>, <code>train.py</code>, <code>prepare.py</code>, <code>analysis.ipynb</code>.</li>
+  <li><a href="https://github.com/karpathy/nanochat">karpathy/nanochat</a> — the parent project the training code is cherry-picked from.</li>
+  <li>Karpathy's launch threads (linked in the repo README) and the community explainers (DataCamp, Data Science Dojo) for context and the reported results.</li>
+  <li>Companion docs in this lab: <code>docs/positional_embeddings/concepts_qa.md</code> (the RoPE you see inside <code>train.py</code>), <code>docs/progress.html</code> (tracker), <code>llm_career_guide.html</code> (the curriculum this maps to).</li>
+</ul>
+
+</div><!-- /content -->
+
+<footer>
+  AutoResearch Crash Course · LLM Systems Lab · companion to <a href="https://github.com/karpathy/autoresearch">karpathy/autoresearch</a><br>
+  Built to teach the harness, not the kernels. Next step → build the RAG version (Part IX).
+</footer>
+</main>
+</div>
+</body>
+</html>

@@ -287,3 +287,78 @@ attention side**. Linearity is necessary but not sufficient; **orthogonality**
 (norm-preserving rotation) is the part that makes the absolute terms vanish. That is why RoPE
 is *rotary* specifically — engineered so the $QK^\top$ inner product is *forced* through
 $R_{j-i}$.
+
+---
+
+## 7. The absolute angle, the collapsed scalar, and why addition risks "contamination"
+
+### 7.1 The absolute angle of $q_m$ alone is meaningless
+
+$q_m = R(m\theta)\,q$ — the angle this single rotated vector sits at depends on $m$, an
+artifact of which slot the token landed in. It carries no semantic content by itself.
+Only the **angle between two rotated vectors** means anything:
+
+$$\angle(q_m, k_n) = \angle(q,k) + (n-m)\theta = \phi_{\text{sem}} + \phi_{\text{pos}}$$
+
+i.e. semantic angle plus a relative-position term. Both halves are individually meaningful —
+it's the *absolute* angle of one rotated vector in isolation that is not.
+
+### 7.2 The dot product is a single scalar — semantic and positional info cannot be unmixed after the fact
+
+$$q_m\cdot k_n = |q||k|\cos(\phi_{\text{sem}} + (n-m)\theta)$$
+
+One real number folding two quantities (a similarity angle and a relative offset) through
+$\cos$. This is **irreversible** — $\cos$ is many-to-one, so distinct $(\phi_{\text{sem}},
+n-m)$ pairs can in principle produce identical scores. Single frequency $\theta$ would make
+this a real ambiguity. RoPE's actual scheme uses a bank of frequencies $\theta_i$ across
+dimension pairs (§4.4); a collision must then occur simultaneously across *all* of them to
+matter, which the multi-frequency, near-orthogonal structure makes practically negligible —
+same logic as why multi-tone signals resolve phase ambiguity that a single tone can't.
+
+### 7.3 Why force token-emb and pos-emb to the same dimension in sinusoidal PE?
+
+They're **added** elementwise ($x_m + p_m$), not concatenated, so the dimensions must match by
+construction. The standard justification for why summing two different "kinds" of
+information into one space doesn't just produce mush: **random/near-orthogonal vectors in
+high dimension concentrate near $\cos\approx 0$** (a concentration-of-measure fact, same
+family as Johnson–Lindenstrauss). For random unit vectors $u,v\in\mathbb R^d$:
+$\mathbb E[u\cdot v]=0$, $\mathrm{std}(u\cdot v)\sim 1/\sqrt d$.
+
+Verified empirically (20k trials per $d$, iid Gaussian → normalized):
+
+| $d$ | std(cos) | predicted $1/\sqrt d$ | max\|cos\| |
+|---|---|---|---|
+| 2 | 0.707 | 0.707 | 1.000 |
+| 8 | 0.352 | 0.354 | 0.961 |
+| 64 | 0.125 | 0.125 | 0.476 |
+| 512 | 0.044 | 0.044 | 0.166 |
+| 4096 | 0.016 | 0.016 | 0.062 |
+
+At $d=2$ (one RoPE rotation block) the orthogonality argument is worthless. At
+$d_{\text{model}}=512$+, random directions are almost guaranteed near-perpendicular, so a
+downstream linear layer ($W_Q$, $W_K$) can plausibly project out $x_m$ or $p_m$ separately
+even though they were summed.
+
+**Caveat**: the bound is a *probabilistic, population-level* statement about *random*
+vectors. $x_m$ is a learned, structured embedding and $p_m$ is a fixed deterministic
+sinusoid — neither is actually random, so nothing guarantees training won't push them toward
+alignment rather than away from it. It's a favorable-odds argument, not a guarantee.
+
+### 7.4 Does RoPE also "contaminate" dimension values? Yes — but it cancels exactly, addition doesn't
+
+Both schemes alter every raw dimension value when position is applied — that's unavoidable for
+*any* position-dependent transform to carry information. The real asymmetry:
+
+- **Addition**: $|x_m+p_m|\neq|x_m|$ — norm (possibly a learned salience/confidence signal) is
+  polluted by an unrelated positional quantity, and the resulting four-term score expansion
+  (§5 Step 3) leaves cross-terms (b),(c) **uncancelled** — they remain absolute-position- and
+  content-entangled, relying on training + the §7.3 orthogonality odds to sort out.
+- **Rotation**: $|q_m| = |q|$ exactly always (rotation is an isometry) — magnitude survives
+  untouched. And the positional contamination doesn't linger: it **algebraically collapses**
+  into $R_{n-m}$ inside the one operation that matters, the dot product (§5/§6) — proven, not
+  hoped for.
+
+So the deeper criticism of sinusoidal-addition isn't "it contaminates" (RoPE does too, in the
+sense of altering raw values) — it's **uncancelled, unstructured contamination the network
+must learn its way around**, vs. RoPE's contamination that is guaranteed to cancel into a
+clean relative-only term by construction.

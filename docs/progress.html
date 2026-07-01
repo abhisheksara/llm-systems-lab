@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Progress Tracker — DS → AI Engineer Camp</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Lora:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:          #f7f4ef;
+    --surface:     #ffffff;
+    --surface-2:   #f0ece4;
+    --border:      #e2ddd5;
+    --ink:         #1a1714;
+    --ink-muted:   #7a7268;
+    --ink-faint:   #b0a99f;
+    --red:         #c0392b;
+    --green:       #1a6b3a;
+    --green-light: #edf7f1;
+    --amber:       #b07d0a;
+    --amber-light: #fdf8ec;
+    --gray-light:  #f0ece4;
+    --blue:        #1a3f7a;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Lora', serif;
+    font-size: 15px;
+    line-height: 1.7;
+  }
+
+  header {
+    background: var(--ink);
+    color: #f7f4ef;
+    padding: 48px 0 40px;
+  }
+
+  .header-inner { max-width: 880px; margin: 0 auto; padding: 0 40px; }
+
+  .header-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(247,244,239,0.5);
+    margin-bottom: 16px;
+  }
+
+  header h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(28px, 4.5vw, 42px);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+
+  header h1 span { color: #e8a830; }
+
+  .header-sub {
+    font-size: 14px;
+    color: rgba(247,244,239,0.6);
+    font-style: italic;
+    max-width: 560px;
+  }
+
+  main { max-width: 880px; margin: 0 auto; padding: 0 40px 100px; }
+
+  /* ---- summary bar ---- */
+  .summary {
+    margin-top: -24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    padding: 24px 28px;
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    flex-wrap: wrap;
+  }
+
+  .summary-pct {
+    font-family: 'Syne', sans-serif;
+    font-size: 34px;
+    font-weight: 800;
+    line-height: 1;
+    min-width: 80px;
+  }
+
+  .summary-bar-wrap { flex: 1; min-width: 200px; }
+
+  .summary-bar {
+    height: 10px;
+    background: var(--gray-light);
+    border-radius: 5px;
+    overflow: hidden;
+    display: flex;
+  }
+  .summary-bar .seg.done { background: var(--green); }
+  .summary-bar .seg.progress { background: var(--amber); }
+
+  .summary-legend {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-muted);
+  }
+  .summary-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+  .dot.done { background: var(--green); }
+  .dot.progress { background: var(--amber); }
+  .dot.todo { background: var(--ink-faint); }
+
+  /* ---- tiers ---- */
+  .section-title {
+    margin: 56px 0 20px;
+    padding-bottom: 14px;
+    border-bottom: 2px solid var(--ink);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .section-title h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+  }
+
+  .tier-count {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-faint);
+  }
+
+  .tier-desc {
+    font-size: 13px;
+    color: var(--ink-muted);
+    font-style: italic;
+    margin: -8px 0 16px;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 34px 1fr 110px;
+    align-items: center;
+    border: 1px solid var(--border);
+    border-bottom: none;
+    background: var(--surface);
+  }
+  .row:last-child { border-bottom: 1px solid var(--border); }
+  .row[data-status="done"] { background: var(--green-light); }
+  .row[data-status="progress"] { background: var(--amber-light); }
+
+  .row-num {
+    text-align: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-faint);
+    border-right: 1px solid var(--border);
+    padding: 12px 0;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .row-body { padding: 11px 16px; border-right: 1px solid var(--border); }
+
+  .row-name {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .row-note {
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin-top: 3px;
+    line-height: 1.5;
+  }
+
+  .row-status {
+    text-align: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    padding: 10px 8px;
+  }
+  .row[data-status="done"] .row-status     { color: var(--green); }
+  .row[data-status="progress"] .row-status { color: var(--amber); }
+  .row[data-status="todo"] .row-status     { color: var(--ink-faint); }
+
+  .skip-tier .row { opacity: 0.6; }
+
+  .row.added { border-left: 3px solid var(--blue); }
+  .row.added .row-num { color: var(--blue); font-weight: 600; }
+
+  footer {
+    background: var(--ink);
+    color: rgba(247,244,239,0.4);
+    padding: 22px 40px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+  }
+
+  @media (max-width: 600px) {
+    main, .header-inner { padding-left: 20px; padding-right: 20px; }
+    .row { grid-template-columns: 30px 1fr 80px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <p class="header-tag">// LLM Systems Lab · Learning Camp</p>
+    <h1>Progress <span>Tracker</span></h1>
+    <p class="header-sub">Status against the 34-concept priority list in <code>llm_career_guide.html</code>. Edit the <code>data-status</code> attribute on a row (todo / progress / done) as topics get covered — this file is the single source of truth, plain HTML, diffable in git.</p>
+  </div>
+</header>
+
+<main>
+
+  <div class="summary">
+    <div class="summary-pct" id="pct">0%</div>
+    <div class="summary-bar-wrap">
+      <div class="summary-bar"><div class="seg done" id="seg-done"></div><div class="seg progress" id="seg-progress"></div></div>
+      <div class="summary-legend">
+        <span><span class="dot done"></span><span id="count-done">0</span> done</span>
+        <span><span class="dot progress"></span><span id="count-progress">0</span> in progress</span>
+        <span><span class="dot todo"></span><span id="count-todo">0</span> not started</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- UP NEXT — ADDED OUTSIDE THE ORIGINAL 36 -->
+  <div class="section-title">
+    <h2>Up Next — Added Topics</h2>
+    <span class="tier-count">2 concepts</span>
+  </div>
+  <p class="tier-desc">Outside the original 36-concept curriculum, added based on current goals.</p>
+
+  <div class="row added" data-status="done">
+    <div class="row-num">A1</div>
+    <div class="row-body"><div class="row-name">Autoresearch — Design Deep-Dive</div><div class="row-note">docs/autoresearch_crash_course.html (harness anatomy, the loop, immutable-eval guardrail, run/config guide, RAG generalization). Repo cloned at autoresearch/. Next: build the RAG-harness version (Part IX).</div></div>
+    <div class="row-status">Done</div>
+  </div>
+  <div class="row added" data-status="todo">
+    <div class="row-num">A2</div>
+    <div class="row-body"><div class="row-name">LLM From Scratch</div></div>
+    <div class="row-status">Not started</div>
+  </div>
+
+  <!-- TIER 1 — BLOCKING -->
+  <div class="section-title">
+    <h2>Priority 1 — Blocking</h2>
+    <span class="tier-count">9 concepts</span>
+  </div>
+  <p class="tier-desc">Day-1 work. Solid before applying.</p>
+
+  <div class="row" data-status="todo">
+    <div class="row-num">27</div>
+    <div class="row-body"><div class="row-name">Tool Use / Function Calling</div></div>
+    <div class="row-status">Not started</div>
+  </div>
+  <div class="row" data-status="done">
+    <div class="row-num">20</div>
+    <div class="row-body"><div class="row-name">RAG</div><div class="row-note">src/rag/, notebooks/rag_pipeline.ipynb — ingest, chunk, embed, retrieve, rerank (CrossEncoder), RAGAS eval (src/rag/eval/ragas_eval.py)</div></div>
+    <div class="row-status">Done</div>
+  </div>
+  <div class="row" data-status="todo">
+    <div class="row-num">28</div>
+    <div class="row-body"><div class="row-name">ReAct Pattern</div></div>
+    <div class="row-status">Not started</div>
+  </div>
+  <div class="row" data-status="todo">
+    <div class="row-num">32</div>
+    <div class="row-body"><div class="row-name">Structured Outputs</div></div>
+    <div class="row-status">Not started</div>
+  </div>
+  <div class="row" data-status="todo">
+    <div class="row-num">12</div>
+    <div class="row-body"><div class="row-name">SFT / Fine-Tuning</div></div>
+    <div class="row-status">Not started</div>
+  </div>
+  <div class="row" data-status="todo">
+    <div class="row-num">14</div>
+    <div class="row-body"><div class="row-name">DPO</div></div>
+    <div class="row-status">Not started</div>
+  </div>
+  <div class="row" data-status="done">
+    <div class="row-num">24</div>
+    <div class="row-body"><div class="row-name">LLM-as-Judge</div><div class="row-note">src/rag/eval/judge.py, tests/test_eval/test_judge.py, docs/judge_length_bias.png — judge implementation + length-bias analysis</div></div>
+    <div class="row-status">Done</div>
+  </div>
+  <div class="row" data-status="todo">
+    <div class="row-num">7</div>
+    <div class="row-body"><div class="row-name">KV Cache</div></div>
+    <div class="row-status">Not started</div>
+  </div>
+  <div class="row" data-status="todo">
+    <div class="row-num">10</div>
+    <div class="row-body"><div class="row-name">Quantization</div></div>
+    <div class="row-status">Not started</div>
+  </div>
+
+  <!-- TIER 2 — DIFFERENTIATING -->
+  <div class="section-title">
+    <h2>Priority 2 — Differentiating</h2>
+    <span class="tier-count">11 concepts</span>
+  </div>
+  <p class="tier-desc">Learn within 3 months of job searching.</p>
+
+  <div class="row" data-status="todo"><div class="row-num">31</div><div class="row-body"><div class="row-name">Multi-Agent Orchestration</div></div><div class="row-status">Not started</div></div>
+  <div class="row" data-status="todo"><div class="row-num">29</div><div class="row-body"><div class="row-name">Agent Memory Types</div></div><div class="row-status">Not started</div></div>
+  <div class="row" data-status="todo"><div class="row-num">36</div><div class="row-body"><div class="row-name">MCP (Model Context Protocol)</div></div><div class="row-status">Not started</div></div>
+  <div class="row" data-status="todo"><div class="row-num">33</div><div class="row-body"><div class="row-name">Context Management &amp; Compaction</div></div><div class="row-status">Not started</div></div>
+  <div class="row" data-status="todo"><div class="row-num">35</div><div class="row-body"><div class="row-name">Prompt Injection &amp; Guardrails</div></div><div class="row-status">Not started</div></div>
+  <div class="row" data-status="todo"><div class="row-num">34</div><div class="row-body"><div class="row-name">Human-in-the-Loop</div></div><div class="row-status">Not started</div></div>
+  <div class="row" data-status="todo"><div class="row-num">30</div><div class="row-body"><div class="row-name">Planning &amp; Task Decomposition</div></div><div class="row-status">Not started</div></div>
+  <div class="row" data-status="todo"><div class="row-num">5</div><div class="row-body"><div class="row-name">FlashAttention</div></div><div class="row-status">Not started</div></div>
+  <div class="row" data-status="todo"><div class="row-num">23</div><div class="row-body"><div class="row-name">Benchmark Contamination</div></div><div class="row-status">Not started</div></div>
+  <div class="row" data-status="todo"><div class="row-num">25</div><div class="row-body"><div class="row-name">Chatbot Arena / ELO</div></div><div class="row-status">Not started</div></div>
+  <div class="row" data-status="todo"><div class="row-num">22</div><div class="row-body"><div class="row-name">Benchmarks (MMLU, GPQA, GSM8K)</div></div><div class="row-status">Not started</div></div>
+
+  <!-- TIER 3 — KNOW THE CONCEPT -->
+  <div class="section-title">
+    <h2>Priority 3 — Know the Concept</h2>
+    <span class="tier-count">10 concepts</span>
+  </div>
+  <p class="tier-desc">Don't need to implement. Need to know what it is and why it exists.</p>
+
+  <div class="row" data-status="todo"><div class="row-num">8</div><div class="row-body"><div class="row-name">PagedAttention / vLLM</div></div><div class="row-status">Not started</div></div>
+  <div class="row" data-status="todo"><div class="row-num">6</div><div class="row-body"><div class="row-name">GQA / MQA</div></div><div class="row-status">Not started</div></div>
+  <div class="row" data-status="done">
+    <div class="row-num">9</div>
+    <div class="row-body"><div class="row-name">Speculative Decoding</div><div class="row-note">docs/speculative_decoding_reference.html, notebooks/speculative_decoding_tutorial.ipynb — gamma sweep, speedup analysis</div></div>
+    <div class="row-status">Done</div>
+  </div>
+  <div class="row" data-status="todo"><div class="row-num">16</div><div class="row-body"><div class="row-name">Mixture of Experts (MoE)</div></div><div class="row-status">Not started</div></div>
+  <div class="row" data-status="todo"><div class="row-num">15</div><div class="row-body"><div class="row-name">Scaling Laws</div></div><div class="row-status">Not started</div></div>
+  <div class="row" data-status="todo"><div class="row-num">13</div><div class="row-body"><div class="row-name">RLHF</div></div><div class="row-status">Not started</div></div>
+  <div class="row" data-status="todo"><div class="row-num">1</div><div class="row-body"><div class="row-name">Transformer &amp; Self-Attention</div></div><div class="row-status">Not started</div></div>
+  <div class="row" data-status="todo"><div class="row-num">2</div><div class="row-body"><div class="row-name">Tokenization</div></div><div class="row-status">Not started</div></div>
+  <div class="row" data-status="todo"><div class="row-num">19</div><div class="row-body"><div class="row-name">Long Context / Ring Attention</div></div><div class="row-status">Not started</div></div>
+  <div class="row" data-status="todo"><div class="row-num">26</div><div class="row-body"><div class="row-name">HELM</div></div><div class="row-status">Not started</div></div>
+
+  <!-- SKIP -->
+  <div class="section-title">
+    <h2>Skip for Now</h2>
+    <span class="tier-count">4 concepts</span>
+  </div>
+  <p class="tier-desc">Unless joining a foundation-model lab. Tracked anyway since one got studied out of curiosity.</p>
+
+  <div class="skip-tier">
+    <div class="row" data-status="todo"><div class="row-num">18</div><div class="row-body"><div class="row-name">Tensor / Pipeline Parallelism</div></div><div class="row-status">Not started</div></div>
+    <div class="row" data-status="todo"><div class="row-num">18b</div><div class="row-body"><div class="row-name">ZeRO / DeepSpeed</div></div><div class="row-status">Not started</div></div>
+    <div class="row" data-status="done">
+      <div class="row-num">3</div>
+      <div class="row-body"><div class="row-name">Positional Encoding Math (RoPE)</div><div class="row-note">docs/positional_embeddings_reference.html, docs/positional_embeddings/concepts_qa.md (7 sections), notebooks/positional_embeddings_tutorial.ipynb — full derivation + extrapolation + empirical proofs. Curriculum says skip; done anyway.</div></div>
+      <div class="row-status">Done</div>
+    </div>
+    <div class="row" data-status="todo"><div class="row-num">4</div><div class="row-body"><div class="row-name">RMSNorm internals</div></div><div class="row-status">Not started</div></div>
+  </div>
+
+</main>
+
+<footer>
+  llm-systems-lab · progress.html · counts computed live from data-status attributes
+</footer>
+
+<script>
+  const rows = document.querySelectorAll('.row');
+  let done = 0, progress = 0, todo = 0;
+  rows.forEach(r => {
+    const s = r.dataset.status;
+    if (s === 'done') done++;
+    else if (s === 'progress') progress++;
+    else todo++;
+  });
+  const total = rows.length;
+  const pct = Math.round((done / total) * 100);
+  document.getElementById('pct').textContent = pct + '%';
+  document.getElementById('seg-done').style.width = (done / total * 100) + '%';
+  document.getElementById('seg-progress').style.width = (progress / total * 100) + '%';
+  document.getElementById('count-done').textContent = done;
+  document.getElementById('count-progress').textContent = progress;
+  document.getElementById('count-todo').textContent = todo;
+</script>
+
+</body>
+</html>

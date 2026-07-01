@@ -7,3 +7,5 @@ data/
 papers/
 *.egg-info/
 .env
+.claude/settings.local.json
+autoresearch/

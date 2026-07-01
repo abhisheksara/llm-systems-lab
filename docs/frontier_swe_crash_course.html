@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FrontierSWE — Reading Proximal Labs' Long-Horizon Coding Benchmark</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:          #faf8f4;
+    --surface:     #ffffff;
+    --surface-2:   #f1ede5;
+    --border:      #e3ddd3;
+    --ink:         #1b1815;
+    --ink-soft:    #4a443c;
+    --ink-muted:   #7a7268;
+    --ink-faint:   #aaa298;
+    --accent:      #b5470f;   /* burnt orange */
+    --accent-soft: #fbeee6;
+    --green:       #1a6b3a;
+    --green-soft:  #ecf6f0;
+    --red:         #b3261e;
+    --red-soft:    #fbedec;
+    --blue:        #1a3f7a;
+    --blue-soft:   #eef2fb;
+    --amber:       #9a6b08;
+    --amber-soft:  #fcf6e8;
+    --code-bg:     #1d1b18;
+    --code-ink:    #e9e4da;
+  }
+
+  * , *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Lora', serif;
+    font-size: 16px;
+    line-height: 1.72;
+  }
+
+  /* ---------- layout ---------- */
+  .wrap { display: grid; grid-template-columns: 260px 1fr; max-width: 1180px; margin: 0 auto; }
+
+  aside {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 36px 22px 60px 32px;
+    border-right: 1px solid var(--border);
+    background: var(--bg);
+  }
+  aside .brand {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 17px;
+    letter-spacing: -0.01em;
+    margin-bottom: 4px;
+  }
+  aside .brand .dot { color: var(--accent); }
+  aside .brand-sub {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 26px;
+  }
+  aside nav a {
+    display: block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-muted);
+    text-decoration: none;
+    padding: 5px 0 5px 12px;
+    border-left: 2px solid transparent;
+    transition: color .15s, border-color .15s;
+    line-height: 1.5;
+  }
+  aside nav a:hover { color: var(--accent); border-left-color: var(--accent); }
+  aside nav a.part {
+    margin-top: 16px;
+    color: var(--ink);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 10.5px;
+    border-left-color: var(--border);
+  }
+  aside nav a.part:first-of-type { margin-top: 0; }
+
+  main { padding: 0 0 120px; min-width: 0; }
+
+  /* ---------- hero ---------- */
+  header.hero {
+    background: var(--ink);
+    color: #f7f4ef;
+    padding: 60px 52px 50px;
+    margin-bottom: 8px;
+    position: relative;
+    overflow: hidden;
+  }
+  header.hero::after {
+    content:'';
+    position:absolute; right:-60px; top:-60px;
+    width: 300px; height: 300px;
+    background: radial-gradient(circle, rgba(181,71,15,0.30), transparent 70%);
+  }
+  .hero-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: rgba(247,244,239,0.55); margin-bottom: 18px;
+  }
+  header.hero h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(30px, 4vw, 46px);
+    font-weight: 800; line-height: 1.06; letter-spacing: -0.02em;
+    margin-bottom: 18px; position: relative; z-index: 1;
+  }
+  header.hero h1 span { color: #f0913f; }
+  .hero-sub {
+    font-size: 16px; font-style: italic; color: rgba(247,244,239,0.72);
+    max-width: 620px; position: relative; z-index: 1;
+  }
+  .hero-meta {
+    margin-top: 26px; display: flex; flex-wrap: wrap; gap: 8px;
+    position: relative; z-index: 1;
+  }
+  .hero-meta span {
+    font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.08em;
+    padding: 5px 11px; border: 1px solid rgba(247,244,239,0.22); border-radius: 2px;
+    color: rgba(247,244,239,0.72);
+  }
+
+  .content { padding: 0 52px; }
+
+  /* ---------- typography ---------- */
+  .part-divider {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--accent); margin: 64px 0 6px; font-weight: 600;
+  }
+  h2 {
+    font-family: 'Syne', sans-serif; font-weight: 700;
+    font-size: 26px; letter-spacing: -0.01em; line-height: 1.2;
+    margin: 8px 0 18px; padding-bottom: 12px; border-bottom: 2px solid var(--ink);
+  }
+  h3 {
+    font-family: 'Syne', sans-serif; font-weight: 600;
+    font-size: 19px; margin: 36px 0 12px; color: var(--ink);
+  }
+  h4 {
+    font-family: 'IBM Plex Mono', monospace; font-weight: 600;
+    font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--ink-soft); margin: 26px 0 8px;
+  }
+  p { margin: 14px 0; }
+  a { color: var(--accent); }
+  strong { font-weight: 600; color: var(--ink); }
+  em { color: var(--ink-soft); }
+  ul, ol { margin: 14px 0 14px 26px; }
+  li { margin: 7px 0; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+
+  code {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.86em;
+    background: var(--surface-2); padding: 2px 6px; border-radius: 3px;
+    color: var(--accent); white-space: nowrap;
+  }
+
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 8px; overflow-x: auto;
+    margin: 18px 0; font-size: 13px; line-height: 1.6;
+    font-family: 'IBM Plex Mono', monospace;
+    border: 1px solid #2c2925;
+  }
+  pre code { background: none; color: inherit; padding: 0; white-space: pre; font-size: inherit; }
+  pre .c  { color: #8a8478; font-style: italic; }   /* comment */
+  pre .k  { color: #e0843c; }                         /* keyword */
+  pre .s  { color: #9ccb6a; }                         /* string  */
+  pre .n  { color: #6fb3d2; }                         /* number/ident accent */
+  pre .f  { color: #d9b15c; }                         /* function */
+  pre .hl { color: #f0913f; font-weight: 600; }       /* highlight */
+
+  /* ---------- callouts ---------- */
+  .box {
+    border-left: 4px solid var(--ink); background: var(--surface);
+    padding: 16px 20px; margin: 22px 0; border-radius: 0 6px 6px 0;
+  }
+  .box .label {
+    font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--ink-muted); margin-bottom: 6px; font-weight: 600;
+  }
+  .box p:first-of-type { margin-top: 0; }
+  .box p:last-child { margin-bottom: 0; }
+  .box.transfer { border-color: var(--accent); background: var(--accent-soft); }
+  .box.transfer .label { color: var(--accent); }
+  .box.warn { border-color: var(--red); background: var(--red-soft); }
+  .box.warn .label { color: var(--red); }
+  .box.key  { border-color: var(--green); background: var(--green-soft); }
+  .box.key .label { color: var(--green); }
+  .box.note { border-color: var(--blue); background: var(--blue-soft); }
+  .box.note .label { color: var(--blue); }
+  .box.try  { border-color: var(--amber); background: var(--amber-soft); }
+  .box.try .label { color: var(--amber); }
+
+  /* ---------- tables ---------- */
+  table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; }
+  th {
+    font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint);
+    text-align: left; padding: 10px 13px; background: var(--surface-2);
+    border: 1px solid var(--border); font-weight: 500;
+  }
+  td { padding: 11px 13px; border: 1px solid var(--border); vertical-align: top;
+       background: var(--surface); line-height: 1.55; }
+  td code { white-space: normal; }
+
+  /* ---------- anatomy diagram ---------- */
+  .anatomy { margin: 28px 0; }
+  .anatomy-row { display: grid; grid-template-columns: 150px 1fr; gap: 14px; margin-bottom: 12px; align-items: stretch; }
+  .anatomy-tag {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 12px 14px; border-radius: 6px; color: #fff; line-height: 1.3;
+  }
+  .anatomy-tag small { font-weight: 400; opacity: .8; font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; margin-top: 3px; }
+  .t-immut { background: #5a5048; }
+  .t-mut   { background: var(--accent); }
+  .t-spec  { background: var(--blue); }
+  .t-metric{ background: var(--green); }
+  .t-loop  { background: var(--ink); }
+  .anatomy-desc { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; font-size: 14px; display: flex; align-items: center; }
+  .anatomy-desc code { white-space: normal; }
+
+  /* loop steps */
+  .loop { counter-reset: step; margin: 20px 0; }
+  .loop .step {
+    display: grid; grid-template-columns: 34px 1fr; gap: 14px; margin-bottom: 10px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px;
+  }
+  .loop .step::before {
+    counter-increment: step; content: counter(step);
+    font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 13px;
+    width: 30px; height: 30px; border-radius: 50%; background: var(--ink); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .loop .step.keep::before { background: var(--green); }
+  .loop .step.discard::before { background: var(--red); }
+  .loop .step div { font-size: 14px; align-self: center; }
+
+  footer {
+    background: var(--ink); color: rgba(247,244,239,0.5);
+    padding: 26px 52px; font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+    margin-top: 60px; line-height: 1.7;
+  }
+  footer a { color: #f0913f; }
+
+  .toc-progress { font-size: 11px; }
+
+  @media (max-width: 860px) {
+    .wrap { grid-template-columns: 1fr; }
+    aside { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    aside nav { columns: 2; }
+    .content, header.hero, footer { padding-left: 22px; padding-right: 22px; }
+    .anatomy-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ============ SIDEBAR ============ -->
+<aside>
+  <div class="brand">frontier<span class="dot">·</span>swe</div>
+  <div class="brand-sub">Crash Course</div>
+  <nav>
+    <a class="part" href="#p1">I · The Big Idea</a>
+    <a href="#what">What it is</a>
+    <a href="#harbor">Built on Harbor</a>
+
+    <a class="part" href="#p2">II · Harness Anatomy</a>
+    <a href="#layers">Three layers</a>
+    <a href="#tasks-list">The 17 tasks</a>
+
+    <a class="part" href="#p3">III · A Task, File by File</a>
+    <a href="#tomlyaml">task.toml + job.yaml</a>
+    <a href="#instruction">instruction.md — the spec</a>
+    <a href="#verifier">tests/ — the verifier</a>
+
+    <a class="part" href="#p4">IV · The Agent Loop</a>
+    <a href="#timer">The timer daemon</a>
+    <a href="#exec">claude_code.py — invocation</a>
+    <a href="#safety">Sandbox safety wrappers</a>
+
+    <a class="part" href="#p5">V · The Eval</a>
+    <a href="#reward">reward.json — raw verifier output</a>
+    <a href="#gating">Category-gated scoring</a>
+    <a href="#anticheat">Anti-cheat &amp; hidden data</a>
+
+    <a class="part" href="#p6">VI · Orchestration &amp; Infra</a>
+    <a href="#modal">Modal sandboxes</a>
+    <a href="#agents-matrix">The multi-agent matrix</a>
+
+    <a class="part" href="#p7">VII · Side by Side with AutoResearch</a>
+    <a href="#lineage">The literal lineage</a>
+    <a href="#table">Comparison table</a>
+
+    <a class="part" href="#p8">VIII · Design Principles</a>
+    <a href="#principles">What each harness optimizes for</a>
+
+    <a class="part" href="#p9">IX · Where Each Is Weak</a>
+    <a href="#weak-fswe">FrontierSWE's open seams</a>
+    <a href="#weak-ar">AutoResearch's open seams</a>
+
+    <a class="part" href="#p10">X · Reference</a>
+    <a href="#checklist">Transferable checklist</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</aside>
+
+<!-- ============ MAIN ============ -->
+<main>
+<header class="hero">
+  <div class="hero-tag">// LLM Systems Lab · Companion to <code style="color:inherit;background:rgba(255,255,255,0.1)">../autoresearch_crash_course.html</code></div>
+  <h1>FrontierSWE: Reading <span>Proximal Labs'</span><br>Long-Horizon Coding Benchmark</h1>
+  <p class="hero-sub">FrontierSWE grades coding agents on tasks that take hours, not minutes: rewrite a compiler backend, build a lossless notebook compressor, train a molecular-graph regressor under a closed-data cap. This doc reads the cloned repo end to end — task spec, agent loop, verifier, anti-cheat — then lines it up next to <code style="color:inherit;background:rgba(255,255,255,0.1)">autoresearch</code> to see what a "small, honest harness" and a "production benchmark harness" actually share.</p>
+  <div class="hero-meta">
+    <span>Repo: Proximal-Labs/frontier-swe</span>
+    <span>17 tasks, ~400 commits</span>
+    <span>Built on the Harbor framework</span>
+  </div>
+</header>
+
+<div class="content">
+
+<!-- ===================== PART I ===================== -->
+<div class="part-divider" id="p1">Part I</div>
+<h2>The Big Idea</h2>
+
+<h3 id="what">What FrontierSWE actually is</h3>
+<p>FrontierSWE is a benchmark from <strong>Proximal Labs</strong> that tests coding agents on <em>ultra-long-horizon</em> problems — the kind that would occupy a strong engineer or researcher for hours to days, not a single diff. The first release ships <strong>17 tasks</strong> split across three categories: <strong>implementation</strong> (port a real system to a new language — e.g. <code>git-to-zig</code>, <code>lua-native-compiler</code>), <strong>performance</strong> (rewrite a hot path for speed without breaking correctness — e.g. <code>ffmpeg-swscale-rewrite</code>, <code>cranelift-codegen-opt</code>), and <strong>ml_research</strong> (open-ended modeling under a constraint — e.g. <code>pcqm4mv2-autoresearch</code>, <code>frogsgame-rl</code>). Results are tracked on a public leaderboard at <a href="https://www.frontierswe.com">frontierswe.com</a>.</p>
+<p>Because the tasks are this large, binary pass/fail grading doesn't make sense — a task can be "70% correct and 1.4x faster" and that's a meaningful, comparable outcome. So every task is graded on a continuous <code>[0,1]</code> scale instead, via a per-task custom verifier.</p>
+
+<h3 id="harbor">It doesn't reinvent the harness — it sits on Harbor</h3>
+<p>The single most important structural fact about this repo: <strong>FrontierSWE is not a standalone harness</strong>. It's a content + glue package built on top of <a href="https://www.harborframework.com/">Harbor</a>, an open framework (from the team behind Terminal-Bench) for specifying and running sandboxed agent evaluations. The <code>frontier-swe</code> repo imports <code>harbor</code> as a dependency and supplies three things Harbor doesn't ship with: the <strong>tasks</strong> (problem content + verifiers), <strong>harbor_ext</strong> (per-agent-CLI shims), and <strong>scoring</strong> (the leaderboard-specific reward math).</p>
+<div class="box note">
+  <div class="label">Why this matters for the comparison</div>
+  <p>AutoResearch is a single, self-contained repo that <em>is</em> its own harness. FrontierSWE's repo is the <em>content layer</em> on a separately-versioned generic orchestration framework. Reading it well means reading two boundaries: where Harbor's job ends and <code>harbor_ext</code>/<code>tasks</code> begins, and where the agent's writable surface ends and the verifier's authority begins.</p>
+</div>
+
+<!-- ===================== PART II ===================== -->
+<div class="part-divider" id="p2">Part II</div>
+<h2>Harness Anatomy</h2>
+
+<h3 id="layers">Three layers, cleanly separated by directory</h3>
+<div class="anatomy">
+  <div class="anatomy-row">
+    <div class="anatomy-tag t-loop">Harbor (pip dep)<small>not in this repo</small></div>
+    <div class="anatomy-desc">Generic trial orchestration: spins sandboxes, runs an agent against an environment for a budget, collects logs/artifacts, calls the verifier, writes <code>reward.json</code>. Knows nothing about notebooks, compilers, or molecules.</div>
+  </div>
+  <div class="anatomy-row">
+    <div class="anatomy-tag t-spec">harbor_ext/<small>agent shims</small></div>
+    <div class="anatomy-desc">9 Python files, one per coding-agent CLI (<code>claude_code.py</code>, <code>codex.py</code>, <code>gemini_cli.py</code>, <code>qwen_code.py</code>, <code>kimi_cli.py</code>, <code>opencode_cli.py</code>, <code>cursor_cli.py</code>, <code>deepseek_claude.py</code>, <code>glm_claude.py</code>) — translates "run this instruction" into the right CLI invocation, env vars, and auth for that specific tool, plus shared safety helpers (<code>agent_shell_safety.py</code>, <code>network_allowlist.py</code>, <code>modal_managed.py</code>).</div>
+  </div>
+  <div class="anatomy-row">
+    <div class="anatomy-tag t-mut">tasks/&lt;name&gt;/<small>17 of these</small></div>
+    <div class="anatomy-desc">The actual benchmark content: <code>task.toml</code> (resource limits), <code>instruction.md</code> (what the agent is told), <code>job.yaml</code> (which agents/models run it, how many trials), <code>environment/</code> (Docker image + mounted data), <code>tests/</code> (the verifier — hidden test data + scoring code).</div>
+  </div>
+  <div class="anatomy-row">
+    <div class="anatomy-tag t-metric">scripts/ + SCORING.md<small>leaderboard math</small></div>
+    <div class="anatomy-desc"><code>score_from_reward.py</code> is the standalone reference implementation that turns a task's raw <code>reward.json</code> into the gated <code>[0,1]</code> leaderboard score, documented in <code>SCORING.md</code>.</div>
+  </div>
+</div>
+
+<h3 id="tasks-list">The 17 tasks, by category</h3>
+<table>
+  <tr><th>Category</th><th>Tasks</th><th>What's graded</th></tr>
+  <tr>
+    <td><strong>implementation</strong></td>
+    <td><code>git-to-zig</code>, <code>dart-style-haskell</code>, <code>lua-native-compiler</code>, <code>postgres-sqlite-wire-adapter</code>, <code>modular-stack-wan21</code></td>
+    <td>Test-pass-rate correctness against a hidden suite.</td>
+  </tr>
+  <tr>
+    <td><strong>performance</strong></td>
+    <td><code>libexpat-to-x86asm</code>, <code>ffmpeg-swscale-rewrite</code>, <code>pyright-type-checking-optimization</code>, <code>granite-mamba2-inference-optimization</code>, <code>notebook-compression</code>, <code>revideo-perf-opt</code>, <code>cranelift-codegen-opt</code>, <code>dependent-type-checker</code>, <code>inference-system-optimization</code></td>
+    <td>Correctness first (gate), then speedup/compression-ratio — see Part V.</td>
+  </tr>
+  <tr>
+    <td><strong>ml_research</strong></td>
+    <td><code>pcqm4mv2-autoresearch</code>, <code>frogsgame-rl</code>, <code>optimizer-design</code></td>
+    <td>Raw reward from the task's own metric (MAE, board-clear count, etc.) — no separate correctness gate.</td>
+  </tr>
+</table>
+
+<!-- ===================== PART III ===================== -->
+<div class="part-divider" id="p3">Part III</div>
+<h2>A Task, File by File</h2>
+<p>Take <code>tasks/notebook-compression/</code> as the worked example: build a lossless, domain-specific compressor for <code>.ipynb</code> files, graded against a hidden holdout corpus.</p>
+
+<h3 id="tomlyaml"><code>task.toml</code> + <code>job.yaml</code> — the immutable resource contract</h3>
+<p><code>task.toml</code> is short and load-bearing: it fixes the agent's wall-clock budget (<code>agent.timeout_sec = 28800.0</code>, 8h), the verifier's own budget (<code>verifier.timeout_sec = 14400.0</code>, 4h), the sandbox's resources (16 vCPU, 32 GiB RAM, 150 GiB scratch, <strong>no GPU, no internet</strong>), and which pinned Docker image to boot (<code>ghcr.io/proximal-labs/frontier-swe/notebook-compression:v5</code>). <code>job.yaml</code> is the orchestration-side sibling: it names the run (<code>notebook-compression-full-sweep</code>), sets <code>n_attempts: 3</code> trials, picks the environment backend (<code>harbor_ext.modal_managed:ManagedModalEnvironment</code>), and lists every agent+model pair to run against this one task — each with its own <code>override_timeout_sec</code>, which can exceed <code>task.toml</code>'s default.</p>
+<div class="box note">
+  <div class="label">A live wrinkle, in the repo's own comments</div>
+  <p><code>job.yaml</code>'s <code>artifacts</code> list carries a comment explaining why <code>/app</code> (the whole working directory, not just the declared output paths) is captured: a prior model run left helper modules outside the declared submission paths and scored zero. The fix applied was widening artifact capture, <em>not</em> editing <code>instruction.md</code> — because changing the task spec mid-benchmark would make already-scored trials incomparable to future ones. This is the same "immutable substrate" instinct as AutoResearch's read-only <code>prepare.py</code>, but FrontierSWE has to defend it against its <em>own</em> need to patch bugs without invalidating a public leaderboard.</p>
+</div>
+
+<h3 id="instruction"><code>instruction.md</code> — the spec the agent reads</h3>
+<p>This is FrontierSWE's analogue of <code>program.md</code>, but task-specific and far more contractual. For <code>notebook-compression</code> it defines: the exact metric formula (a geometric-mean compressed/original byte ratio over hidden notebooks), the submission contract (a single executable <code>/app/run</code> with <code>fit</code> / <code>compress</code> / <code>decompress</code> subcommands), what must live where (everything decompress needs must be inside <code>artifact_dir</code>, because decompress runs in a fresh sandbox with <em>only</em> that directory and the compressed input), hard resource caps per stage, and a "Behavioral Rules" section that is — almost verbatim — AutoResearch's autonomy mandate:</p>
+<pre><code><span class="c"># from tasks/notebook-compression/instruction.md</span>
+- Never stop to ask. Work autonomously until interrupted.
+- Check time regularly with `cat /app/.timer/remaining_secs`.
+- Keep `/app/run` valid and executable at all times.
+- Keep a self-eval result in `/app/dev_results/` so you can track progress.
+- Optimize for the hidden holdout, not for pathological compression
+  of your own validation split.</code></pre>
+
+<h3 id="verifier"><code>tests/</code> — the verifier, sealed off from the agent</h3>
+<p>The agent never sees <code>tests/hidden_test_set_bundle.zip</code>. <code>tests/test.sh</code> is the Harbor-facing entrypoint: it logs to <code>/logs/verifier/verifier.log</code>, extracts the hidden bundle into a temp dir, runs the task's own scoring code (<code>compute_reward.py</code> / <code>scoring_core.py</code>), and — critically — has a <code>trap</code> that writes a <strong>fallback failure</strong> <code>reward.json</code> if anything goes wrong, so a crash never silently produces "no score" (it produces a guaranteed worst-case score instead).</p>
+
+<!-- ===================== PART IV ===================== -->
+<div class="part-divider" id="p4">Part IV</div>
+<h2>The Agent Loop</h2>
+
+<h3 id="timer">The timer daemon — fixed budget, agent-readable</h3>
+<p>Where AutoResearch hard-codes a 5-minute training run inside <code>train.py</code> itself, FrontierSWE enforces the wall-clock budget <em>outside</em> the agent (via Harbor's trial timeout) and exposes it back in as plain files the agent is told to poll:</p>
+<pre><code>cat /app/.timer/remaining_secs   <span class="c"># seconds remaining</span>
+cat /app/.timer/elapsed_secs     <span class="c"># seconds elapsed</span>
+test -f /app/.timer/alert_30min  <span class="c"># true when &lt;=30 min remain</span>
+test -f /app/.timer/alert_10min  <span class="c"># true when &lt;=10 min remain</span></code></pre>
+<p>Every <code>instruction.md</code> repeats the same shape of inner loop. <code>pcqm4mv2-autoresearch</code>'s is the clearest, and it's worth reading next to AutoResearch's own loop (Part VII has the side-by-side):</p>
+<div class="loop">
+  <div class="step"><div><strong>Edit</strong> <code>train.py</code> or supporting code.</div></div>
+  <div class="step"><div><strong>Run</strong> <code>python3 train.py &gt; run.log 2&gt;&amp;1</code>.</div></div>
+  <div class="step"><div><strong>Check</strong> <code>grep "dev_mae" run.log</code>.</div></div>
+  <div class="step keep"><div><strong>Keep</strong> the best checkpoint; regenerate <code>predict.py</code> if needed.</div></div>
+  <div class="step"><div><strong>Repeat</strong> until time expires — maintain valid artifacts even on crash.</div></div>
+</div>
+
+<h3 id="exec"><code>claude_code.py</code> — what actually happens when the agent runs</h3>
+<p><code>harbor_ext/claude_code.py</code> shows the literal exec path for one agent. It is far more involved than "spin up Claude in this repo": it wires <code>ANTHROPIC_API_KEY</code> (with Z.ai-compatible fallbacks), forces <code>--permission-mode=bypassPermissions</code> (no interactive approval — the trial must run unattended), explicitly passes <code>--disallowed-tools WebSearch WebFetch</code> (search is disabled so the benchmark measures the model's own capability, not its ability to find the answer online), and — notably — has a built-in <strong>one-shot recovery path</strong>: if the run dies from exceeding the output-token limit, it greps the crashed session's ID out of the log and resumes that exact session with a hint to write smaller chunks, with no second retry.</p>
+<div class="box transfer">
+  <div class="label">Transferable idea</div>
+  <p>The "websearch/webfetch disabled for fairness" choice is the same instinct as AutoResearch's "no new dependencies" rule — both are guarding against the agent improving its score by reaching outside the intended search space, rather than by getting better at the actual problem.</p>
+</div>
+
+<h3 id="safety">Sandbox safety wrappers — hiding the host from the agent</h3>
+<p><code>agent_shell_safety.py</code> installs replacement <code>pgrep</code>/<code>pkill</code> binaries ahead of the real ones on <code>PATH</code>, that filter out the calling process's own ancestor chain. An autonomous agent running unattended for 8+ hours will routinely try to inspect or kill processes; this stops it from seeing or signaling Harbor's own supervising processes, without the agent ever being told this wrapper exists. It's a small, concrete example of a class of guardrail AutoResearch doesn't need at all — because AutoResearch runs on the user's own machine, in the user's own terminal, with no host process to hide.</p>
+
+<!-- ===================== PART V ===================== -->
+<div class="part-divider" id="p5">Part V</div>
+<h2>The Eval</h2>
+
+<h3 id="reward"><code>reward.json</code> — what the verifier actually emits</h3>
+<p>Every verifier writes a structured <code>reward.json</code>: a top-level <code>reward</code>/<code>score</code>, plus <strong>component</strong> fields (<code>subscores</code>, <code>additional_data</code> — per-workload pass counts, measured speedups, module breakdowns). SCORING.md is explicit that the top-level <code>score</code> in the raw verifier output is <em>conservative</em> — often hard-zeroed on any correctness miss — and that the leaderboard's real, partial-credit score is derived from the components by a second pass.</p>
+
+<h3 id="gating">Category-gated scoring — <code>score_from_reward.py</code></h3>
+<p>This is the piece that turns 17 wildly different metrics (compression ratio, MAE, test-pass-rate, board-clears) into one comparable <code>[0,1]</code> number, by category:</p>
+<table>
+  <tr><th>Category</th><th>Gated score formula</th><th>Intuition</th></tr>
+  <tr><td><code>implementation</code></td><td><code>correctness</code></td><td>Pure pass-rate against hidden tests.</td></tr>
+  <tr><td><code>performance</code></td><td><code>0.5 * correctness</code>, or <code>0.5 + 0.5 * speedup</code> once <code>correctness == 1.0</code></td><td>Speed only counts once correctness is perfect — you cannot trade correctness for speed.</td></tr>
+  <tr><td><code>ml_research</code></td><td>raw reward (e.g. <code>frogsgame-rl</code>: board-clear count / 500)</td><td>No gate; the task's own metric <em>is</em> the score.</td></tr>
+  <tr><td><code>notebook-compression</code> (special)</td><td>speedup-equivalent (compression ratio) if fully correct, else <code>0</code></td><td>Round-trip exactness is binary — any byte mismatch is a hard fail ranked below every valid run.</td></tr>
+  <tr><td><code>libexpat-to-x86asm</code> (special)</td><td>weighted per-module correctness gates an uncapped performance score</td><td>Partial credit across 7 weighted test modules before performance counts at all.</td></tr>
+</table>
+<p>The leaderboard then aggregates <strong>5 trials</strong> per (task, agent) pair into <strong>Avg Score</strong> and <strong>Best Score</strong>, plus a <code>Correctness X/5</code> column counting how many trials reached 100% correctness (i.e. unlocked the speedup tier) — which can be <code>0/5</code> while Avg/Best are still non-zero, since partial correctness still earns partial credit on the correctness-only side of the gate.</p>
+
+<h3 id="anticheat">Anti-cheat and hidden data</h3>
+<p>Two structurally separate defenses, doing different jobs: <strong>hidden test data</strong> (the agent's sandbox never contains <code>tests/hidden_test_set_bundle.zip</code> or its unpacked contents — it can only see the visible/dev split) stops the agent from <em>directly</em> reading the answer; a separate <strong>post-hoc anti-cheat audit</strong> (<code>scoring/anticheat.json</code>) flags trials after the fact and zeroes them regardless of their computed score — catching things like exfiltrating verifier internals through side channels, which hiding files alone can't prevent.</p>
+
+<!-- ===================== PART VI ===================== -->
+<div class="part-divider" id="p6">Part VI</div>
+<h2>Orchestration &amp; Infra</h2>
+
+<h3 id="modal">Modal sandboxes — <code>ManagedModalEnvironment</code></h3>
+<p><code>harbor_ext/modal_managed.py</code> extends Harbor's generic Modal backend with FrontierSWE-specific plumbing: domain/CIDR <strong>network allowlists</strong> (built from live AWS/Google IP-range feeds plus per-agent fallback domain lists, since most tasks set <code>allow_internet = false</code> and only the agent CLI's own API endpoints are allowed through), <strong>GHCR-authenticated image builds</strong> (<code>build_registry_token_env</code>), <strong>persisted trial-state volumes</strong> so long sandboxes survive interruptions, and <strong>debug probes</strong> that periodically sample disk usage and tail agent logs — observability that matters when a single trial can run unattended for 8+ hours in the cloud.</p>
+
+<h3 id="agents-matrix">The multi-agent matrix — this is a leaderboard, not a session</h3>
+<p>A single <code>job.yaml</code> fans one task out across many agent CLIs and models at once — Claude Code on Opus, Codex on GPT-5.4, Gemini CLI, Qwen Code, Kimi CLI, OpenCode on GLM-5, each with its own reasoning-effort/thinking knobs — so the same frozen task and verifier produce a directly comparable row per model on the public leaderboard. This cross-agent fan-out is the single biggest structural difference from AutoResearch, which assumes exactly one agent, in one repo, on one machine, with no comparison being made to anyone else's run.</p>
+
+<!-- ===================== PART VII ===================== -->
+<div class="part-divider" id="p7">Part VII</div>
+<h2>Side by Side with AutoResearch</h2>
+
+<h3 id="lineage">The literal lineage: <code>pcqm4mv2-autoresearch</code></h3>
+<div class="box key">
+  <div class="label">Not just a similar idea — a named homage</div>
+  <p>One of FrontierSWE's three <code>ml_research</code> tasks is literally called <code>pcqm4mv2-autoresearch</code>, and its <code>instruction.md</code> "Experiment Loop" section (quoted in Part IV) reproduces karpathy's autoresearch pattern almost verbatim: edit the one mutable file, run it, grep one metric out of a log, keep the checkpoint if it improved, repeat until time runs out, never stop to ask. FrontierSWE didn't just converge on the same idea independently — it embedded AutoResearch's exact loop shape as <em>one task inside a much larger benchmark</em>, then wrapped it in hidden-eval, multi-trial, multi-agent machinery that AutoResearch itself doesn't have.</p>
+</div>
+
+<h3 id="table">Comparison table</h3>
+<table>
+  <tr><th>Dimension</th><th>AutoResearch</th><th>FrontierSWE</th></tr>
+  <tr><td><strong>Scope</strong></td><td>One task: pretrain a tiny GPT, minimize <code>val_bpb</code>, single GPU.</td><td>17 tasks across implementation / performance / ML-research: compilers, codecs, type checkers, RL envs, molecular regression.</td></tr>
+  <tr><td><strong>Task spec</strong></td><td>One <code>program.md</code> ("a skill") + two fixed files (<code>prepare.py</code>, <code>train.py</code>).</td><td>Per task: <code>instruction.md</code> + <code>task.toml</code> (resources/timeouts) + <code>job.yaml</code> (which agents/models, trial count) + <code>environment/</code> (Docker image) + <code>tests/</code> (verifier).</td></tr>
+  <tr><td><strong>Mutable surface</strong></td><td><code>train.py</code> only — everything else is off-limits.</td><td>Task-specific submission contract: e.g. a single <code>/app/run</code> CLI for <code>notebook-compression</code>, <code>/app/submission</code> + <code>/app/checkpoint</code> for <code>pcqm4mv2</code>, a whole repo port for <code>git-to-zig</code>.</td></tr>
+  <tr><td><strong>Immutable substrate</strong></td><td><code>prepare.py</code> (data prep + <code>evaluate_bpb</code>), enforced by instruction + code review, not by sandboxing.</td><td><code>tests/</code> verifier + hidden holdout data the agent's sandbox never contains, network egress allowlists, resource caps in <code>task.toml</code>.</td></tr>
+  <tr><td><strong>Orchestration</strong></td><td>None — one human launches one agent session in one repo on one machine.</td><td>Harbor's <code>ManagedModalEnvironment</code>: per-trial cloud sandboxes, versioned GHCR images, persisted state volumes, debug probes.</td></tr>
+  <tr><td><strong>Agent harness</strong></td><td>Whatever CLI the human points at the repo, under however they're already authenticated.</td><td><code>harbor_ext/</code> wraps 9 distinct agent CLIs with model-specific env wiring, forced non-interactive permission mode, disabled web search, and crash-recovery retries.</td></tr>
+  <tr><td><strong>Time budget</strong></td><td>Fixed 5-minute wall clock per training run, hard-coded inside the training script.</td><td>Per-task timer daemon (<code>/app/.timer/*</code>) plus separately enforced <code>agent.timeout_sec</code> (hours) and <code>verifier.timeout_sec</code>, set in <code>task.toml</code>/<code>job.yaml</code>.</td></tr>
+  <tr><td><strong>Accept/reject mechanism</strong></td><td><code>git commit</code>; advance the branch if <code>val_bpb</code> improved, else <code>git reset</code> back — an explicit, agent-driven state machine, every few minutes.</td><td>The agent free-runs for its whole multi-hour budget with no externally-imposed keep/discard step; <code>n_attempts</code> independent trials are scored <em>after the fact</em> and aggregated as Avg/Best of N.</td></tr>
+  <tr><td><strong>Loop control</strong></td><td>"LOOP FOREVER" is the harness's entire job — propose → run → measure → keep/discard, written once in <code>program.md</code>.</td><td>Each task's own inner loop (seen in <code>pcqm4mv2-autoresearch</code>) is the same shape, but it's local to that one task; the cross-trial orchestration — parallelism, retries, scoring — lives in Harbor, outside the agent's awareness entirely.</td></tr>
+  <tr><td><strong>Metric</strong></td><td>One frozen scalar: <code>val_bpb</code> (vocab-size-independent bits/byte).</td><td>Per-task custom verifier → structured <code>reward.json</code> → globally normalized via <code>score_from_reward.py</code> into a category-gated <code>[0,1]</code> score.</td></tr>
+  <tr><td><strong>Anti-gaming</strong></td><td>Single keystone: <code>prepare.py</code> is read-only by instruction, defended by the human reviewing diffs.</td><td>Hidden held-out data + network allowlists + sandboxed <code>pgrep</code>/<code>pkill</code> wrappers hiding host processes + a separate post-hoc anti-cheat audit that zeroes flagged trials.</td></tr>
+  <tr><td><strong>Multi-agent / leaderboard</strong></td><td>Not a benchmark — one human, one machine, no cross-agent comparison.</td><td>Explicitly a benchmark: the same 17 tasks run against many agent+model pairs for 5 trials each, published at <a href="https://www.frontierswe.com">frontierswe.com</a>.</td></tr>
+  <tr><td><strong>Infra footprint</strong></td><td>Single local NVIDIA GPU, ~1,000 lines total, zero cloud dependency.</td><td>Cloud-only: Modal sandboxes, GHCR-hosted multi-GB Docker images per task, build pipelines, persisted volumes.</td></tr>
+</table>
+
+<!-- ===================== PART VIII ===================== -->
+<div class="part-divider" id="p8">Part VIII</div>
+<h2>Design Principles</h2>
+
+<h3 id="principles">What each harness is actually optimizing for</h3>
+<p>Both harnesses converge on the same core invariant — <strong>a hard line between what the agent may edit and what judges it</strong> — but they spend that invariant on different goals.</p>
+<ul>
+  <li><strong>AutoResearch optimizes for replicability on one machine.</strong> Every design choice (fixed 5-minute runs, one file to edit, git as the only state store, no cloud dependency) exists to make the loop runnable overnight on a single GPU you already own, with nothing else to configure.</li>
+  <li><strong>FrontierSWE optimizes for cross-agent comparability at scale.</strong> Category-gated scoring, hidden holdout data, network allowlists, anti-cheat audits, and pinned Docker images all exist to make sure that when Claude Opus scores 0.71 and GPT-5.4 scores 0.68 on the same task, that 0.03 gap reflects a real capability difference and not a sandboxing leak or a frozen-instruction drift between trials run weeks apart.</li>
+  <li><strong>Both treat the agent loop itself as a known, reusable shape.</strong> Propose → run → measure-against-a-frozen-metric → keep-or-discard → repeat-until-budget-exhausted appears almost unchanged in both repos — it's evidence this is close to a canonical pattern for any autonomous optimization loop, independent of scale.</li>
+</ul>
+
+<!-- ===================== PART IX ===================== -->
+<div class="part-divider" id="p9">Part IX</div>
+<h2>Where Each Is Still Weak</h2>
+
+<h3 id="weak-fswe">FrontierSWE's open seams</h3>
+<div class="box warn">
+  <div class="label">Two sources of truth for the score</div>
+  <p>SCORING.md states outright that the raw <code>reward.json["score"]</code> is conservative and doesn't match the published leaderboard score — a second script (<code>score_from_reward.py</code>) has to re-derive it from components. The doc itself flags this as temporary ("the next release will emit the gated score directly"), but until then, anyone reproducing scores from raw verifier output without that second pass will get numbers that don't match the leaderboard.</p>
+</div>
+<div class="box warn">
+  <div class="label">Anti-cheat is post-hoc, not preventive</div>
+  <p>A trial can run to completion, score well, and only later get zeroed by the anti-cheat audit. That's a reasonable trade given how much surface an 8-hour, internet-adjacent, unattended agent session has — but it means the harness trusts after-the-fact detection over architectural prevention for whatever the audit catches that hidden-data and network allowlisting don't.</p>
+</div>
+<div class="box warn">
+  <div class="label">Patching around the spec instead of fixing it</div>
+  <p>The <code>notebook-compression</code> <code>job.yaml</code> comment (Part III) is a real instance of the immutability-vs-fairness tension: a bug in how artifacts were captured zeroed valid trials, and the fix was widening artifact capture rather than clarifying <code>instruction.md</code>, specifically to avoid changing the task for future models versus already-scored ones. That's defensible, but it means the spec the agent reads and the spec the verifier actually enforces can quietly diverge over the benchmark's lifetime.</p>
+</div>
+<div class="box warn">
+  <div class="label">Nothing here is runnable on a laptop</div>
+  <p>Every task needs a Modal account, GHCR image pulls, and API keys for whichever agent CLI — there's no equivalent of AutoResearch's "single GPU, <code>uv sync</code>, go." FrontierSWE is built to be operated by Proximal Labs as a benchmark service, not picked up and pointed at your own problem the way AutoResearch's README explicitly invites.</p>
+</div>
+
+<h3 id="weak-ar">AutoResearch's open seams, from the other side</h3>
+<div class="box warn">
+  <div class="label">No hidden eval, no anti-gaming beyond instruction-following</div>
+  <p>FrontierSWE's hidden-data + network-allowlist + anti-cheat stack exists because, at multi-hour unattended scale, an agent <em>will</em> find shortcuts a human reviewer might miss. AutoResearch's single keystone ("don't touch <code>prepare.py</code>", enforced by a human glancing at diffs) works at 5-minute-loop, single-user scale — but it has no answer to an agent that, say, overfits to the validation split or quietly increases its own time budget, the way FrontierSWE's holdout/allowlist design is built to catch.</p>
+</div>
+<div class="box warn">
+  <div class="label">No cross-run comparability</div>
+  <p>AutoResearch's README says this directly: results aren't comparable across different people's compute. FrontierSWE's entire raison d'être — pinned images, fixed resource envelopes, multi-trial averaging — is the answer to exactly that gap, at the cost of all the infra weight in Part VI.</p>
+</div>
+
+<!-- ===================== PART X ===================== -->
+<div class="part-divider" id="p10">Part X</div>
+<h2>Reference</h2>
+
+<h3 id="checklist">A transferable checklist, updated for benchmark-scale loops</h3>
+<p>Extending the single-user checklist from the AutoResearch crash course with what FrontierSWE adds once you need <em>cross-agent, cross-run</em> comparability:</p>
+<ul>
+  <li><strong>☐ Hidden eval data</strong> the agent's sandbox structurally cannot reach, not just an instruction not to look.</li>
+  <li><strong>☐ Pinned, versioned environments</strong> (container images) so "the same task" actually means the same task months apart.</li>
+  <li><strong>☐ A category-aware scoring function</strong> when raw outcomes aren't comparable across task types (correctness-gates-speedup, raw-reward-only, etc.).</li>
+  <li><strong>☐ A fallback score on crash/timeout</strong> so a verifier failure never produces a missing data point.</li>
+  <li><strong>☐ Network/process isolation</strong> proportional to how long and how unattended the agent runs.</li>
+  <li><strong>☐ A post-hoc audit layer</strong> as a backstop for whatever the architectural defenses miss.</li>
+  <li><strong>☐ A documented, standalone scorer</strong> (like <code>score_from_reward.py</code>) so the leaderboard math isn't a black box.</li>
+</ul>
+
+<h3 id="sources">Sources</h3>
+<ul>
+  <li><a href="https://github.com/Proximal-Labs/frontier-swe">Proximal-Labs/frontier-swe</a> — the repository (cloned for this doc): <code>README.md</code>, <code>SCORING.md</code>, <code>harbor_ext/</code>, <code>scripts/score_from_reward.py</code>, <code>tasks/notebook-compression/</code>, <code>tasks/pcqm4mv2-autoresearch/</code>.</li>
+  <li><a href="https://www.frontierswe.com">frontierswe.com</a> — public leaderboard and blog.</li>
+  <li><a href="https://www.harborframework.com/">Harbor framework</a> — the generic sandboxed-agent-evaluation framework FrontierSWE is built on.</li>
+  <li><a href="https://github.com/karpathy/autoresearch">karpathy/autoresearch</a> — the harness this doc compares against; see the companion <a href="autoresearch_crash_course.html">AutoResearch Crash Course</a> in this lab.</li>
+</ul>
+
+</div><!-- /content -->
+
+<footer>
+  FrontierSWE Crash Course · LLM Systems Lab · companion to <a href="autoresearch_crash_course.html">autoresearch_crash_course.html</a><br>
+  Read the harness, not just the leaderboard. Two repos, one loop shape, very different stakes.
+</footer>
+</main>
+</div>
+</body>
+</html>
