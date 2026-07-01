@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LLM Training Pipeline — Complete Reference</title>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+  body { font-family: Georgia, serif; max-width: 860px; margin: 40px auto; padding: 0 20px; line-height: 1.7; color: #1a1a1a; }
+  h1 { border-bottom: 3px solid #1a1a1a; padding-bottom: 10px; }
+  h2 { border-bottom: 1px solid #ccc; margin-top: 48px; }
+  h3 { margin-top: 32px; color: #333; }
+  .definition { background: #e8f0fe; border-left: 4px solid #1a73e8; padding: 12px 16px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+  .theorem { background: #e6f4ea; border-left: 4px solid #137333; padding: 12px 16px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+  .proof-toggle { background: #f1f3f4; border-left: 4px solid #888; padding: 12px 16px; margin: 8px 0; border-radius: 0 6px 6px 0; cursor: pointer; }
+  .proof-body { display: none; background: #fafafa; border-left: 4px solid #aaa; padding: 12px 16px; margin: 0 0 16px 0; }
+  .proof-body.open { display: block; }
+  .keyfacts { background: #fff8e1; border-left: 4px solid #f9ab00; padding: 12px 16px; margin: 24px 0; border-radius: 0 6px 6px 0; }
+  .keyfacts ul { margin: 4px 0; }
+  code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+  .algo { background: #f8f8f8; border: 1px solid #ddd; padding: 16px; font-family: monospace; white-space: pre; border-radius: 6px; line-height: 1.5; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+  th, td { border: 1px solid #ddd; padding: 8px 10px; text-align: left; font-size: 0.95em; }
+  th { background: #f4f4f4; }
+  nav { position: sticky; top: 0; background: white; padding: 8px 0; border-bottom: 1px solid #eee; margin-bottom: 32px; }
+  nav a { margin-right: 14px; color: #1a73e8; text-decoration: none; font-size: 0.85em; }
+</style>
+<script>
+function toggleProof(id) {
+  const el = document.getElementById(id);
+  el.classList.toggle('open');
+  const btn = el.previousElementSibling;
+  btn.textContent = el.classList.contains('open') ? '▼ Proof (click to collapse)' : '▶ Proof (click to expand)';
+}
+</script>
+</head>
+<body>
+
+<h1>LLM Training Pipeline — Complete Reference</h1>
+<p><em>Covers pretraining, SFT, reward modeling, PPO/RLHF, DPO, evaluation, and RLVR/GRPO,
+built from scratch alongside <code>notebooks/llm_training_pipeline/</code>. Positional
+encoding depth lives in <code>docs/positional_embeddings_reference.html</code> — not
+re-derived here.</em></p>
+
+<nav>
+  <a href="#s1">1. Pipeline Overview</a>
+  <a href="#s2">2. Transformer Architecture</a>
+  <a href="#s3">3. Pretraining</a>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1">1. The Pipeline Overview</h2>
+
+<p>Training a modern chat/instruct LLM is a sequence of distinct optimization problems, each
+consuming the previous stage's model as its starting point. No single objective produces a
+model that is simultaneously fluent, instruction-following, and aligned with human
+preferences — each property is added by a separate stage with its own loss function and its
+own data.</p>
+
+<table>
+<tr><th>Stage</th><th>Optimizes</th><th>Input</th><th>Output</th></tr>
+<tr><td>Pretraining</td><td>Next-token prediction on raw text</td><td>Unlabeled corpus</td><td>Base model — fluent, but not instruction-following</td></tr>
+<tr><td>SFT</td><td>Next-token prediction on (prompt, response) pairs, loss masked to the response</td><td>Base model + instruction data</td><td>SFT model — follows instructions</td></tr>
+<tr><td>Reward Modeling</td><td>Pairwise preference classification (Bradley-Terry)</td><td>SFT model + preference pairs</td><td>Reward model — scores any (prompt, response)</td></tr>
+<tr><td>PPO / RLHF</td><td>Expected reward, KL-constrained to the SFT policy</td><td>SFT model + reward model</td><td>PPO model — higher-reward outputs</td></tr>
+<tr><td>DPO</td><td>The same KL-constrained preference objective, in closed form</td><td>SFT model + preference pairs (no reward model)</td><td>DPO model — higher-reward outputs, no RL loop</td></tr>
+<tr><td>Evaluation</td><td>N/A — measurement, not training</td><td>SFT / PPO / DPO models</td><td>Win-rates, reward-vs-KL curves</td></tr>
+<tr><td>RLVR / GRPO</td><td>Expected rule-based (verifiable) reward, group-relative baseline</td><td>SFT model + a verifiable task</td><td>GRPO model — higher pass-rate, no reward model or value function</td></tr>
+</table>
+
+<p>Two independent axes are easy to conflate:</p>
+<ul>
+  <li><strong>Capability</strong> (pretraining, and to a lesser extent SFT) — does the model
+  know things and can it produce fluent, on-topic text?</li>
+  <li><strong>Alignment</strong> (reward modeling, PPO, DPO, GRPO) — does the model's
+  distribution over acceptable outputs match what we actually want, given that it was
+  already capable?</li>
+</ul>
+<p>Alignment techniques cannot teach a model facts or skills it didn't already acquire during
+pretraining — they reweight the model's existing output distribution. This is why reward
+hacking is possible: the policy can find high-reward outputs that are not actually
+higher-quality, only better at exploiting the reward signal (covered in depth once the
+reward-modeling stage is built).</p>
+
+<div class="keyfacts">
+<strong>Key Facts — Section 1</strong>
+<ul>
+  <li>Each stage's output checkpoint is the next stage's starting checkpoint — this is a
+  sequential pipeline, not independent experiments.</li>
+  <li>PPO and DPO solve the <em>same</em> objective (KL-constrained reward maximization); PPO
+  does it via an explicit reward model and an RL loop, DPO does it via a closed-form
+  reformulation. GRPO solves a related objective without either a reward model or a value
+  function, using rule-based rewards and a group-relative baseline instead.</li>
+  <li>Alignment reweights; it does not teach new capability.</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2">2. Transformer Architecture</h2>
+
+<p>This pipeline uses a decoder-only ("GPT-style") transformer: a stack of causal
+self-attention + MLP blocks, trained purely on next-token prediction. This is the
+architecture family behind GPT, LLaMA, and essentially every modern chat model — encoder-only
+(BERT) and encoder-decoder (T5) architectures are trained on different objectives (masked
+language modeling, seq2seq) and are not used for open-ended generation in the same way.</p>
+
+<h3>Causal Self-Attention</h3>
+
+<p>Self-attention lets every position mix information from every other position. For a
+sequence of \(T\) token embeddings, each of dimension \(d\), packed into \(X \in
+\mathbb{R}^{T \times d}\):</p>
+
+\[Q = XW_Q,\quad K = XW_K,\quad V = XW_V\]
+\[\text{Attention}(Q,K,V) = \text{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}} + M\right)V\]
+
+<p>where \(d_k\) is the per-head dimension and \(M\) is the <strong>causal mask</strong>: an
+upper-triangular matrix of \(-\infty\) (so position \(i\) cannot attend to position \(j > i\)).
+Language modeling requires this — at training time we compute the loss for every position in
+the sequence simultaneously (teacher forcing), so without a mask a token would attend to its
+own future ground-truth answer and the model would learn nothing useful for generation, where
+future tokens don't exist yet.</p>
+
+<div class="proof-toggle" onclick="toggleProof('proof-scale')">▶ Why divide by \(\sqrt{d_k}\)? (click to expand)</div>
+<div class="proof-body" id="proof-scale">
+<p>Assume the components of \(q\) and \(k\) are independent random variables with mean 0 and
+variance 1 (roughly true after initialization/normalization). Then \(q \cdot k =
+\sum_{i=1}^{d_k} q_i k_i\) is a sum of \(d_k\) independent products, each with mean 0 and
+variance 1, so \(\text{Var}(q \cdot k) = d_k\). As \(d_k\) grows, the dot products grow in
+magnitude, pushing softmax inputs into a regime with extremely small gradients (softmax
+saturates when inputs are far apart). Dividing by \(\sqrt{d_k}\) rescales the dot product back
+to unit variance regardless of \(d_k\), keeping softmax in a well-conditioned regime.</p>
+</div>
+
+<h3>Multi-Head Splitting</h3>
+
+<p>Rather than one attention operation over the full \(d\)-dimensional space, the model splits
+\(Q, K, V\) into \(n_{head}\) chunks of size \(d_k = d / n_{head}\), runs attention
+independently per chunk, and concatenates the results before a final output projection. Each
+head can specialize in a different kind of relationship (e.g. one head tracks adjacent-token
+syntax, another tracks long-range coreference) — a single head sharing the whole
+\(d\)-dimensional space would have to represent all of these simultaneously in one softmax
+distribution per position, which is a much narrower hypothesis class.</p>
+
+<h3>MLP Block</h3>
+
+<p>Each transformer block also has a position-wise feedforward network: a linear layer up to
+\(4d\), a GELU nonlinearity, and a linear layer back down to \(d\). Attention mixes
+information <em>across</em> positions; the MLP processes each position's representation
+independently, and is where most of the model's parameters (and, empirically, most of its
+factual-recall capacity) live.</p>
+
+<h3>Pre-Norm Residual Structure</h3>
+
+<p>Each sub-layer is wrapped as \(x \leftarrow x + \text{SubLayer}(\text{LayerNorm}(x))\)
+(pre-norm), not \(x \leftarrow \text{LayerNorm}(x + \text{SubLayer}(x))\) (post-norm, the
+original Transformer paper's choice). Pre-norm keeps an unimpeded residual (identity) path
+from the input straight through to the output of the stack, which keeps gradient magnitudes
+stable as more layers are stacked; the original post-norm Transformer becomes hard to train
+past a moderate depth without a very careful learning-rate warmup, and GPT-2 onward switched to
+pre-norm for exactly this reason.</p>
+
+<h3>Weight Tying</h3>
+
+<p>The token embedding matrix (\(\mathbb{R}^{V \times d}\), mapping token id → vector) and the
+LM head (\(\mathbb{R}^{d \times V}\), mapping final hidden state → vocab logits) are given the
+<em>same</em> underlying weight matrix (transposed). Intuition: both matrices are fundamentally
+doing the same job — relating a token identity to a point in the same \(d\)-dimensional
+semantic space — so sharing them halves the embedding-related parameter count and acts as a
+regularizer (Press &amp; Wolf, 2017, "Using the Output Embedding to Improve Language Models").
+For a small vocab like this pipeline's ~8k-token BPE vocabulary and a ~14M-parameter model,
+the tied embedding matrix (\(8000 \times 384 \approx 3.1M\) params) is a large fraction of the
+total — tying is not a minor optimization here.</p>
+
+<h3>Position Information</h3>
+
+<p>Self-attention as defined above is <strong>permutation-equivariant</strong> — it has no
+notion of order, so position information must be injected separately. This pipeline uses
+learned absolute position embeddings (a trainable \(\mathbb{R}^{block\_size \times d}\) table,
+added to the token embedding) for simplicity, deliberately not re-deriving sinusoidal/RoPE
+encodings here — see <code>docs/positional_embeddings_reference.html</code> for that full
+treatment, including why RoPE is preferred in production models.</p>
+
+<div class="keyfacts">
+<strong>Key Facts — Section 2</strong>
+<ul>
+  <li>Causal masking is required so that training (which scores every position in parallel via
+  teacher forcing) matches inference (where future tokens don't exist yet).</li>
+  <li>\(1/\sqrt{d_k}\) scaling counteracts variance growth in the dot product as head
+  dimension grows, keeping softmax gradients well-behaved.</li>
+  <li>Multi-head splitting trades one wide attention distribution for several narrower,
+  independently-specializable ones.</li>
+  <li>Pre-norm (not post-norm) gives a clean residual gradient path, which is why it's the
+  modern default for deep transformer stacks.</li>
+  <li>Weight tying shares the token-embedding and LM-head matrices; a meaningful parameter
+  saving at small model/vocab scale.</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s3">3. Pretraining</h2>
+
+<h3>The Objective</h3>
+
+<p>Pretraining maximizes the likelihood of the training corpus under the model, factored
+autoregressively:</p>
+
+\[\mathcal{L}(\theta) = -\sum_{t=1}^{T} \log P_\theta(x_t \mid x_{<t})\]
+
+<p>This is standard cross-entropy loss between the model's predicted next-token distribution
+and the actual next token, averaged over every position in every training sequence
+simultaneously (teacher forcing — the ground-truth previous tokens are fed in, not the model's
+own predictions, which is what makes parallel training over a whole sequence possible in the
+first place).</p>
+
+<h3>Data Packing</h3>
+
+<p>Raw documents vary in length; training needs fixed-length blocks for efficient batching.
+The standard approach: concatenate documents together separated by an end-of-text token,
+then chop the resulting stream into fixed-length chunks (<code>block_size</code> + 1 tokens per
+chunk — the extra token lets the same chunk serve as both the input sequence and, shifted by
+one position, the target sequence). This means a training example may span the tail of one
+story and the head of the next; the model learns to treat the end-of-text token as a hard
+reset signal.</p>
+
+<h3>Optimization</h3>
+
+<ul>
+  <li><strong>AdamW</strong> — Adam with decoupled weight decay; the de facto standard
+  optimizer for transformer pretraining because it handles the very differently-scaled
+  gradients across embedding, attention, and MLP parameters well.</li>
+  <li><strong>Warmup + cosine decay learning-rate schedule</strong> — a short linear warmup
+  (100 steps here) prevents early large gradient updates (when the randomly-initialized model
+  is producing near-arbitrary predictions) from destabilizing training, then a cosine decay
+  down to 10% of the peak LR lets the model settle into a sharper minimum as training
+  progresses.</li>
+  <li><strong>Gradient clipping</strong> (by global norm, to 1.0) — bounds the size of any
+  single update, protecting against the occasional large-loss batch producing a destructive
+  gradient step.</li>
+</ul>
+
+<h3>Reading the Loss Curve</h3>
+
+<p>Cross-entropy loss in nats converts to <strong>perplexity</strong> via
+\(\text{PPL} = e^{\mathcal{L}}\) — the effective number of equally-likely next-token choices
+the model is behaving as if it has. A freshly-initialized model with a uniform ~8k-token vocab
+starts near \(\mathcal{L} = \ln(8000) \approx 9.0\); watching the loss fall from there and
+where it plateaus is the primary pretraining diagnostic before any generation samples are even
+inspected. In this pipeline's calibration run, loss falls from ~9.07 at step 0 to ~3.0 after
+1000 steps (perplexity ~8100 → ~20) on a held-in-distribution TinyStories slice.</p>
+
+<h3>Why Model Scale Bounds Output Quality (Briefly)</h3>
+
+<p>A ~14M-parameter model trained on a narrow, simple corpus like TinyStories can produce
+locally coherent, grammatical short stories — but not because scale doesn't matter. TinyStories
+is deliberately constructed (GPT-4-generated, restricted vocabulary, simple narrative
+structure) so that a much smaller model than a general-purpose LM can still fit the
+distribution well; this is a controlled demonstration, not evidence that model size is
+unimportant in general. The broader empirical finding (Chinchilla / Hoffmann et al. 2022) is
+that for a fixed compute budget, there is a compute-optimal ratio of model parameters to
+training tokens (roughly ~20 tokens per parameter) — most earlier large models were
+significantly undertrained relative to their size. Data curation and quality matter as much as
+raw scale: this pipeline uses TinyStories as-is because it's already curated for the small-model
+regime; at production scale, deduplication, quality filtering, and data-mixture decisions are
+often a bigger lever than architecture changes.</p>
+
+<div class="keyfacts">
+<strong>Key Facts — Section 3</strong>
+<ul>
+  <li>Pretraining loss is next-token cross-entropy, computed at every position in parallel via
+  teacher forcing.</li>
+  <li>Documents are packed into fixed-length blocks separated by an end-of-text token, not
+  padded individually.</li>
+  <li>Warmup+cosine LR and gradient clipping are standard stabilizers, not fine-tuning
+  details specific to this pipeline.</li>
+  <li>Loss ⟷ perplexity via \(e^{\mathcal{L}}\); a useful sanity anchor is \(\ln(\text{vocab
+  size})\) at initialization.</li>
+  <li>Small-model coherence here is a property of TinyStories' controlled distribution, not a
+  refutation of scaling laws.</li>
+</ul>
+</div>
+
+</body>
+</html>
