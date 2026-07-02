@@ -104,3 +104,33 @@ def tokenize_sft_example(topic: str, story: str, tokenizer, eot_id: int, block_s
         torch.tensor(input_ids, dtype=torch.long),
         torch.tensor(labels, dtype=torch.long),
     )
+
+
+def tokenize_prompt_response(prompt: str, response: str, tokenizer, eot_id: int, block_size: int):
+    """Generalizes tokenize_sft_example to arbitrary prompt/response strings (not
+    just the SFT topic template). Same prompt-loss-masking convention: a target
+    token is masked (-100) iff it falls inside the prompt or padding region."""
+    prompt_ids = tokenizer.encode(prompt).ids
+    completion_ids = tokenizer.encode(response).ids + [eot_id]
+    full_ids = (prompt_ids + completion_ids)[: block_size + 1]
+    n_prompt = min(len(prompt_ids), len(full_ids))
+    n_real = len(full_ids)
+
+    pad_len = (block_size + 1) - n_real
+    full_ids = full_ids + [eot_id] * pad_len
+
+    input_ids = full_ids[:-1]
+    targets_raw = full_ids[1:]
+
+    labels = []
+    for i in range(block_size):
+        target_pos = i + 1
+        if target_pos < n_prompt or target_pos >= n_real:
+            labels.append(-100)
+        else:
+            labels.append(targets_raw[i])
+
+    return (
+        torch.tensor(input_ids, dtype=torch.long),
+        torch.tensor(labels, dtype=torch.long),
+    )

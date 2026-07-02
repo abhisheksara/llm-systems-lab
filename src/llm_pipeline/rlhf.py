@@ -162,3 +162,23 @@ def evaluate_actions(policy, idx, prompt_len, gen_len):
     actions = idx[:, prompt_len : prompt_len + gen_len]
     logprobs = F.log_softmax(action_logits, dim=-1).gather(-1, actions.unsqueeze(-1)).squeeze(-1)
     return logprobs, action_values
+
+
+def sequence_logprob(model, input_ids, labels):
+    """Returns (B,): sum of log pi(token) over only the non-masked (response)
+    positions in each sequence — log pi(y|x) for the whole completion."""
+    logits, _ = model(input_ids)
+    logprobs = F.log_softmax(logits, dim=-1)
+    mask = labels != -100
+    safe_labels = labels.clone()
+    safe_labels[~mask] = 0
+    token_logprobs = logprobs.gather(-1, safe_labels.unsqueeze(-1)).squeeze(-1)
+    token_logprobs = token_logprobs * mask
+    return token_logprobs.sum(dim=-1)
+
+
+def dpo_loss(policy_chosen_lp, policy_rejected_lp, ref_chosen_lp, ref_rejected_lp, beta=0.1):
+    pi_logratios = policy_chosen_lp - policy_rejected_lp
+    ref_logratios = ref_chosen_lp - ref_rejected_lp
+    logits = beta * (pi_logratios - ref_logratios)
+    return -F.logsigmoid(logits).mean()
