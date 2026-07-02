@@ -122,7 +122,126 @@ tokenizer training?
 
 """))
 
-# Parts 2-5 are appended here.
+# ─── PART 2: ATTENTION, MLP, BLOCK ───────────────────────────────────────────
+cells.append(md("""
+---
+## Part 2: Causal Self-Attention, MLP, Transformer Block
+
+See `docs/llm_training_pipeline_reference.html#s2` for the full derivation
+of the `1/sqrt(d_k)` scaling and the pre-norm residual structure used below.
+"""))
+
+cells.append(code("""
+from dataclasses import dataclass
+
+@dataclass
+class GPTConfig:
+    vocab_size: int = 8000
+    block_size: int = 256
+    n_layer: int = 6
+    n_head: int = 6
+    n_embd: int = 384
+    dropout: float = 0.1
+
+
+class CausalSelfAttention(nn.Module):
+    def __init__(self, config: GPTConfig):
+        super().__init__()
+        assert config.n_embd % config.n_head == 0
+        self.n_head = config.n_head
+        self.n_embd = config.n_embd
+        self.head_dim = config.n_embd // config.n_head
+
+        self.qkv_proj = nn.Linear(config.n_embd, 3 * config.n_embd)
+        self.out_proj = nn.Linear(config.n_embd, config.n_embd)
+        self.attn_dropout = nn.Dropout(config.dropout)
+        self.resid_dropout = nn.Dropout(config.dropout)
+
+        mask = torch.tril(torch.ones(config.block_size, config.block_size)).view(
+            1, 1, config.block_size, config.block_size
+        )
+        self.register_buffer("causal_mask", mask, persistent=False)
+
+    def forward(self, x):
+        B, T, C = x.shape
+        qkv = self.qkv_proj(x)
+        q, k, v = qkv.split(self.n_embd, dim=2)
+        q = q.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
+        k = k.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
+        v = v.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
+
+        att = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_dim)
+        att = att.masked_fill(self.causal_mask[:, :, :T, :T] == 0, float("-inf"))
+        att = F.softmax(att, dim=-1)
+        att = self.attn_dropout(att)
+
+        y = att @ v
+        y = y.transpose(1, 2).contiguous().view(B, T, C)
+        y = self.resid_dropout(self.out_proj(y))
+        return y
+
+
+class MLP(nn.Module):
+    def __init__(self, config: GPTConfig):
+        super().__init__()
+        self.fc1 = nn.Linear(config.n_embd, 4 * config.n_embd)
+        self.fc2 = nn.Linear(4 * config.n_embd, config.n_embd)
+        self.dropout = nn.Dropout(config.dropout)
+        self.act = nn.GELU()
+
+    def forward(self, x):
+        return self.dropout(self.fc2(self.act(self.fc1(x))))
+
+
+class Block(nn.Module):
+    def __init__(self, config: GPTConfig):
+        super().__init__()
+        self.ln1 = nn.LayerNorm(config.n_embd)
+        self.attn = CausalSelfAttention(config)
+        self.ln2 = nn.LayerNorm(config.n_embd)
+        self.mlp = MLP(config)
+
+    def forward(self, x):
+        x = x + self.attn(self.ln1(x))
+        x = x + self.mlp(self.ln2(x))
+        return x
+"""))
+
+cells.append(code("""
+# TEST 2: shape + causality
+torch.manual_seed(0)
+test_cfg = GPTConfig(vocab_size=100, block_size=16, n_layer=1, n_head=2, n_embd=32, dropout=0.0)
+block = Block(test_cfg)
+block.eval()
+
+B, T, C = 4, 16, 32
+x = torch.randn(B, T, C)
+y = block(x)
+assert y.shape == (B, T, C), f"expected {(B,T,C)}, got {y.shape}"
+print(f"TEST 2a PASSED — Block output shape {tuple(y.shape)}")
+
+# causality: perturbing token T-1 must not change output at positions < T-1
+x2 = x.clone()
+x2[:, -1, :] = torch.randn(B, C)
+y1 = block(x)
+y2 = block(x2)
+assert torch.allclose(y1[:, :-1, :], y2[:, :-1, :], atol=1e-6), "causality violated in Block!"
+print("TEST 2b PASSED — causal mask verified: perturbing the last token does not change earlier outputs")
+"""))
+
+cells.append(md("""
+### Question 2
+
+Attention mixes information **across** positions; the MLP processes each
+position **independently**. Given that, why does the causality test above
+only need to check the attention path — could a bug in the MLP ever leak
+future-token information into an earlier position's output?
+
+*Write your answer below:*
+
+"""))
+
+# Parts 3-5 are appended here.
 
 # ─── WRITE ───────────────────────────────────────────────────────────────────
 nb['cells'] = cells
