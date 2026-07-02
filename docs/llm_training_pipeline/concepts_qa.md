@@ -443,5 +443,43 @@ policy's output distribution in the number of steps this pipeline trains for.
 
 ---
 
-*(Sections for evaluation and RLVR/GRPO are appended here as the
-corresponding notebooks are built.)*
+## 17. Reading a reward-vs-KL curve — what "well-regularized" and "overoptimized" look like on an axis, concretely
+
+Q&A 14 described the two shapes in words; this section pins down exactly what
+to look for on Notebook 5's actual plotted axes (`mean KL(policy || ref)` on
+x, `mean reward-model score` on y, one point per PPO step, connected in
+training order).
+
+**Well-regularized:** the curve traces a roughly monotonic path up and to the
+right — as KL grows step over step, reward grows with it, and the curve
+doesn't visibly bend back down or plateau sharply within the training run.
+This is what this pipeline's 150-step, `kl_beta=0.1` PPO run is designed to
+produce: not enough steps, and enough KL penalty, that the policy hasn't yet
+reached the region where the reward model's proxy-ness becomes exploitable.
+
+**Overoptimized:** the curve would climb for a while and then visibly
+flatten or turn over — later-training points sit *below and to the right* of
+a peak reached at some earlier KL value, meaning the policy kept moving
+further from the reference (KL kept growing) while the reward model's score
+stopped increasing or started decreasing. Gao, Schulman & Hilton 2022's
+actual result plots exactly this shape using a separate high-fidelity "gold"
+reward model as ground truth (which this pipeline does not have access to —
+using the *same* reward model for both the training signal and the
+diagnostic plot means this pipeline's curve can only show the proxy reward's
+own trajectory, not whether it has decoupled from "true" quality; that
+decoupling would only be visible via the judge comparisons in Part 1 of this
+notebook, or by direct human/qualitative reading of the generations).
+
+**Practical implication for reading this pipeline's specific plot:** because
+the same reward model produces both the training signal and the plotted
+curve, a smoothly rising curve is a *necessary but not sufficient* condition
+for "PPO worked well" — it confirms the optimization succeeded at raising the
+proxy reward, not that the proxy reward remained a faithful stand-in for
+story quality throughout. The judge-based win-rate comparison in this
+notebook's Part 1 is what actually tests the latter, using a signal
+independent of the training loop.
+
+---
+
+*(Sections for RLVR/GRPO are appended here as the corresponding notebook is
+built.)*
