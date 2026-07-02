@@ -101,8 +101,8 @@ and the bracketed fraction inside the log becomes
 \(\pi(y|x) \big/ \big(Z(x)\cdot\pi^*(y|x)\big)\) where
 \(\pi^*(y|x) := \pi_{ref}(y|x)\exp(r(x,y)/\beta)/Z(x)\) is a valid probability
 distribution (it's non-negative and sums to 1 by construction). Substituting:</p>
-\[-\beta\,\mathbb{E}_{y\sim\pi}\Big[\log\frac{\pi(y|x)}{\pi^*(y|x)}\Big] - \beta\log Z(x)
-= -\beta\,\mathrm{KL}\big(\pi(\cdot|x) \,\|\, \pi^*(\cdot|x)\big) - \beta\log Z(x)\]
+\[-\beta\,\mathbb{E}_{y\sim\pi}\Big[\log\frac{\pi(y|x)}{\pi^*(y|x)}\Big] + \beta\log Z(x)
+= -\beta\,\mathrm{KL}\big(\pi(\cdot|x) \,\|\, \pi^*(\cdot|x)\big) + \beta\log Z(x)\]
 <p>\(Z(x)\) doesn't depend on \(\pi\), so maximizing this over \(\pi\) is exactly
 minimizing \(\mathrm{KL}(\pi\|\pi^*)\), which is minimized (to zero) exactly when
 \(\pi = \pi^*\). So the objective's unique maximizer is:</p>
