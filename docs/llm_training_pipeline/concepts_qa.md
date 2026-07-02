@@ -241,5 +241,143 @@ Two standard mitigations, in order of what this pipeline uses:
 
 ---
 
-*(Sections for reward modeling, PPO, DPO, evaluation, and RLVR/GRPO are
-appended here as the corresponding notebooks are built.)*
+## 11. Bradley-Terry from first principles — why a logistic link, specifically?
+
+Bradley-Terry (1952) models pairwise comparison outcomes for a set of items with
+latent strengths `s_i > 0` as `P(i > j) = s_i / (s_i + s_j)`. This isn't an
+arbitrary functional form — it's the unique form (up to reparameterization)
+satisfying **Luce's choice axiom** (independence of irrelevant alternatives):
+the relative odds of choosing `i` over `j` shouldn't depend on what *other*
+items are also available in a larger choice set. Substituting `s_i = exp(r_i)`
+turns the ratio into a difference in log-space:
+
+```
+P(i > j) = exp(r_i) / (exp(r_i) + exp(r_j))
+         = 1 / (1 + exp(-(r_i - r_j)))
+         = sigmoid(r_i - r_j)
+```
+
+This is exactly logistic regression on the *difference* of two learned scores —
+which is why the reward model training loss (`-log sigmoid(r_chosen -
+r_rejected)`) is literally a binary cross-entropy loss with the "logit" being
+`r_chosen - r_rejected`. Concretely: `bradley_terry_loss` in
+`src/llm_pipeline/rlhf.py` is `F.binary_cross_entropy_with_logits`-equivalent,
+just written via `logsigmoid` directly. There is no separate "Bradley-Terry
+loss function" beyond ordinary logistic regression applied to reward
+*differences* rather than raw features.
+
+---
+
+## 12. GAE derivation — why the recursive form, and what gamma/lambda actually trade off
+
+Starting from the n-step advantage estimator family: for horizon `n`,
+
+```
+A_t^(n) = sum_{l=0}^{n-1} gamma^l * r_{t+l} + gamma^n * V(s_{t+n}) - V(s_t)
+```
+
+`n=1` gives the one-step TD advantage `A_t^(1) = delta_t = r_t + gamma*V(s_{t+1})
+- V(s_t)` (low variance — only one reward sample and one value estimate — but
+biased by however wrong `V` currently is). `n=infinity` gives the Monte-Carlo
+advantage `A_t^(inf) = sum_{l>=0} gamma^l r_{t+l} - V(s_t)` (unbiased, since it
+uses only observed rewards, but high variance — it accumulates every
+downstream token's sampling randomness).
+
+GAE (Schulman et al. 2016) doesn't pick one `n` — it takes an
+exponentially-weighted average over *all* of them, controlled by `lambda`:
+
+```
+A_t^GAE(gamma,lambda) = (1 - lambda) * sum_{n=1}^{inf} lambda^(n-1) * A_t^(n)
+```
+
+This infinite sum telescopes (the derivation substitutes the n-step formula in
+and collects terms by `delta`) into the closed, recursive form actually
+implemented:
+
+```
+A_t^GAE = delta_t + (gamma*lambda) * A_{t+1}^GAE
+```
+
+computed by sweeping backward through the trajectory from the last timestep
+(`A_T = 0`, no future beyond the episode) to the first. `lambda=0` collapses
+the weighted sum to just the `n=1` term (`A_t = delta_t`, one-step TD).
+`lambda=1` gives every `n` equal infinite... no — concretely, taking the limit
+`lambda -> 1` in the closed form removes the `gamma^n * V(s_{t+n})` bootstrap
+terms entirely (they telescope away against each other across timesteps),
+recovering the full Monte-Carlo advantage. Practically: `lambda` close to 1
+(0.95 here, matching the original GAE paper's recommendation and standard PPO
+implementations) accepts a bit more variance for less dependence on how
+accurate the value function currently is, especially early in training when
+`V` is still a poor estimate.
+
+---
+
+## 13. The clipped surrogate objective — a worked numeric example
+
+Take `clip_eps = 0.2`, and suppose the ratio `r = pi_new(a|s) / pi_old(a|s)`
+comes out to `1.3` (the new policy has become 30% more likely to take this
+action than the policy that generated the rollout), with advantage `A = +1`
+(this action was better than average):
+
+- Unclipped term: `r * A = 1.3 * 1 = 1.3`
+- Clipped term: `clip(1.3, 0.8, 1.2) * A = 1.2 * 1 = 1.2`
+- `min(1.3, 1.2) = 1.2` — the **clipped** term is used.
+
+Because the objective (before the `-1` for gradient descent) takes the `min`,
+and gradient only flows through whichever branch is selected, using the
+clipped branch here means **no further gradient signal pushes this action's
+probability up beyond the 1.2 ratio** — the clip has done its job of stopping
+this particular update from moving further in a direction it already moved a
+lot in.
+
+Now suppose instead `r = 0.7` with the *same* positive advantage `A = +1`
+(the new policy has *decreased* the probability of a good action — this is
+the ratio moving in the direction that *hurts* the objective):
+
+- Unclipped: `0.7 * 1 = 0.7`
+- Clipped: `clip(0.7, 0.8, 1.2) * 1 = 0.8 * 1 = 0.8`
+- `min(0.7, 0.8) = 0.7` — the **unclipped** term is used, and its gradient
+  (which pushes the ratio back up, i.e. corrects the mistake) is preserved.
+
+This confirms the asymmetry stated in the HTML reference: clipping only
+activates to *prevent further movement in an already-taken direction*; it
+never blocks a correction. `src/llm_pipeline/rlhf.py`'s `ppo_clipped_loss`
+test cases (Notebook 3, TEST 6) verify both branches numerically.
+
+---
+
+## 14. Reward hacking and the KL budget — what "well-regularized" vs. "overoptimized" look like
+
+Gao, Schulman & Hilton, 2022 ("Scaling Laws for Reward Model Overoptimization")
+run PPO against reward models of varying quality and plot **gold-standard
+reward** (a separate, higher-fidelity reward signal treated as ground truth)
+against **KL divergence from the reference policy** over the course of
+training. Their key finding: gold reward increases with KL up to a point, then
+turns over and *decreases* — the policy has found ways to exploit the proxy
+reward model that a better judge would penalize. The KL at which this turnover
+happens (the "KL budget") is a measurable property of a given reward model's
+quality, and it shrinks as the reward model gets noisier or more biased
+relative to the true objective.
+
+Two visibly different training curves this implies (both plotted in Notebook
+5's evaluation stage, using the proxy reward model's *own* score against KL,
+since no separate gold-standard judge is used in this pipeline):
+
+- **Well-regularized** (adequate `beta`, moderate training length): reward
+  rises with KL and the curve is monotonically increasing across the training
+  run — KL never grows large enough to reach the point where the reward
+  model's proxy-ness becomes exploitable.
+- **Overoptimized** (`beta` too small, or trained for far more steps than
+  this pipeline's 150): reward keeps climbing according to the *proxy* reward
+  model even as KL grows very large, while qualitative inspection of
+  generations reveals degenerate, repetitive, or off-topic text — the proxy
+  reward and true quality have decoupled. Concretely for this pipeline's
+  sentiment-based proxy: an overoptimized policy could learn to emit strings
+  of maximally-positive-sentiment words ("happy happy wonderful joy...")
+  divorced from coherent story structure, since the sentiment classifier, not
+  a coherence judge, is what's actually being optimized against.
+
+---
+
+*(Sections for DPO, evaluation, and RLVR/GRPO are appended here as the
+corresponding notebooks are built.)*
