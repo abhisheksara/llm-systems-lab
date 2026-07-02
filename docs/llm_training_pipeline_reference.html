@@ -46,6 +46,8 @@ re-derived here.</em></p>
   <a href="#s2">2. Transformer Architecture</a>
   <a href="#s3">3. Pretraining</a>
   <a href="#s4">4. SFT</a>
+  <a href="#s5">5. Reward Modeling</a>
+  <a href="#s6">6. PPO / RLHF</a>
 </nav>
 
 <!-- ============================================================ -->
@@ -341,6 +343,206 @@ toward instruction-following, not enough to erase what pretraining already learn
   (instruction-following); it is comparatively cheap because it is not teaching new knowledge.</li>
   <li>A much lower LR than pretraining is used specifically to avoid catastrophic forgetting on
   the narrower SFT distribution.</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s5">5. Reward Modeling</h2>
+
+<p>PPO needs a scalar reward function \(r(x, y)\) — given a prompt \(x\) and a completion
+\(y\), how good is it? No such function exists directly; humans (or, here, a sentiment
+classifier standing in for a cheap, automatable preference signal) can only reliably say
+<em>which of two completions is better</em>, not assign an absolute numeric quality score.
+The reward model's job is to convert relative preference judgments into an absolute scalar
+function that a downstream RL loop can optimize.</p>
+
+<h3>From Preferences to a Scalar: the Bradley-Terry Model</h3>
+
+<p>The Bradley-Terry model (Bradley &amp; Terry, 1952) assumes each item \(i\) has a latent
+"strength" \(s_i\), and the probability that \(i\) beats \(j\) in a pairwise comparison is:</p>
+
+\[P(i \succ j) = \frac{s_i}{s_i + s_j}\]
+
+<p>Reparameterizing \(s_i = e^{r_i}\) (strengths are always positive, so this is a natural
+substitution) gives the logistic form:</p>
+
+\[P(i \succ j) = \frac{e^{r_i}}{e^{r_i} + e^{r_j}} = \frac{1}{1 + e^{-(r_i - r_j)}} = \sigma(r_i - r_j)\]
+
+<p>This is exactly <strong>Luce's choice axiom</strong> (Luce, 1959) applied to pairwise
+choice: the probability of choosing \(i\) over \(j\) depends only on their two underlying
+values, via a logistic link. Applied to (prompt, completion) pairs — treating the reward
+model's output \(r_\theta(x, y)\) as the latent strength — the probability that a human (or
+our sentiment-based proxy) prefers the chosen completion \(y_w\) over the rejected one
+\(y_l\), for the same prompt \(x\), is modeled as:</p>
+
+\[P(y_w \succ y_l \mid x) = \sigma\big(r_\theta(x, y_w) - r_\theta(x, y_l)\big)\]
+
+<h3>The Pairwise Loss</h3>
+
+<p>Training \(r_\theta\) by maximum likelihood on observed preference pairs gives the
+standard reward-model loss (this is exactly the loss used in InstructGPT, Ouyang et al.
+2022):</p>
+
+\[\mathcal{L}_{RM}(\theta) = -\mathbb{E}_{(x, y_w, y_l)}\Big[\log \sigma\big(r_\theta(x, y_w) - r_\theta(x, y_l)\big)\Big]\]
+
+<div class="definition">
+<strong>Why only relative loss, never an absolute target?</strong> The loss only ever
+depends on the <em>difference</em> \(r_\theta(x,y_w) - r_\theta(x,y_l)\) — it is invariant
+to adding any constant to both rewards. This means the reward model's output scale and
+zero-point are arbitrary; only reward <em>differences</em> (and downstream, the KL-weighted
+comparison to the policy in the PPO objective) are meaningful. This is a direct consequence
+of Bradley-Terry only ever modeling pairwise comparisons.</div>
+
+<h3>Architecture</h3>
+
+<p>The reward model reuses the same transformer trunk as the policy (token + position
+embeddings, the same causal `Block` stack), initialized from the SFT checkpoint's weights
+(a warm start from a model that already produces on-distribution completions, rather than
+training a reward model from scratch), but replaces the tied LM head with a single linear
+`reward_head` applied to the final token's hidden state — one scalar per (prompt,
+completion) sequence, not one prediction per token.</p>
+
+<h3>Reward Hacking</h3>
+
+<div class="definition">
+<strong>Reward hacking</strong> is what happens when the policy, during PPO, finds outputs
+that score highly under \(r_\theta\) without actually being higher-quality by whatever
+standard the reward model was meant to approximate. Because \(r_\theta\) is trained on a
+finite, biased sample of comparisons — here, comparisons derived from a sentiment
+classifier's output on model-generated text, not genuine human judgments of story quality —
+it necessarily has blind spots and systematic biases (e.g. it may reward superficially
+"positive-sounding" vocabulary independent of whether the text is a coherent story at all).
+An unconstrained RL loop will find and exploit any such blind spot, because that is exactly
+what "maximize reward" means. This is precisely why PPO's objective (Section 6) includes a
+KL penalty back to the SFT policy — it bounds how far the policy is allowed to drift in
+search of reward, limiting how hard it can exploit the reward model's imperfections.</div>
+
+<div class="keyfacts">
+<strong>Key Facts — Section 5</strong>
+<ul>
+  <li>The Bradley-Terry pairwise loss is derived from Luce's choice axiom: preference
+  probability is a logistic function of the reward difference.</li>
+  <li>The loss is shift-invariant in the reward model's output — only relative reward
+  matters, never an absolute scale.</li>
+  <li>The reward model's trunk is initialized from the SFT checkpoint, not trained from
+  scratch, and only the final-token scalar head is new.</li>
+  <li>Reward hacking is a structural risk whenever the reward model is a proxy for the true
+  objective — it motivates the KL constraint in PPO.</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s6">6. PPO / RLHF</h2>
+
+<h3>The KL-Constrained RL Objective</h3>
+
+<p>The full RLHF objective (InstructGPT, Ouyang et al. 2022; building on Schulman et al.
+2017's PPO) is not simply "maximize reward" — an unconstrained policy would collapse onto
+whatever narrow, reward-hacking output maximizes \(r_\theta\), regardless of fluency or
+diversity. Instead:</p>
+
+\[\max_\pi \; \mathbb{E}_{x \sim D,\, y \sim \pi(\cdot|x)}\big[r_\theta(x, y)\big] - \beta \, \mathbb{E}_{x}\big[\mathrm{KL}(\pi(\cdot|x) \,\|\, \pi_{ref}(\cdot|x))\big]\]
+
+<p>where \(\pi_{ref}\) is the frozen SFT policy. The KL term is a soft constraint, not a
+hard one: it lets the policy move toward higher reward, but pays an increasing penalty the
+further it drifts from a policy that is known to already produce fluent, on-distribution
+text. \(\beta\) trades off reward-seeking against staying close to \(\pi_{ref}\) — too small
+and the policy reward-hacks (Section 5); too large and training barely moves the policy at
+all.</p>
+
+<p>In practice, the KL term is applied <strong>per-token</strong> as a reward penalty rather
+than as a separate loss term: at each generated token, the model pays
+\(-\beta \big(\log \pi(a_t|s_t) - \log \pi_{ref}(a_t|s_t)\big)\), and the reward model's
+score is added only once, at the final token of the completion (since \(r_\theta\) scores a
+whole completion, not individual tokens). This gives a dense, per-step reward signal instead
+of one sparse reward at the very end of a long sequence.</p>
+
+<h3>Generalized Advantage Estimation (GAE)</h3>
+
+<p>PPO is a policy-gradient method: it needs an estimate of the <strong>advantage</strong>
+\(A_t\) — how much better an action was than the policy's average behavior at that state —
+to know which actions to reinforce. A value function \(V(s_t)\) (here, a linear head added
+on top of the same transformer trunk as the policy — see "Why a Value Function") predicts
+the expected future (KL-penalized + reward-model) return from state \(s_t\), acting as a
+baseline that reduces gradient variance versus using raw returns directly.</p>
+
+<p>GAE (Schulman et al. 2016, "High-Dimensional Continuous Control Using Generalized
+Advantage Estimation") combines the one-step TD residual
+\(\delta_t = r_t + \gamma V(s_{t+1}) - V(s_t)\) across multiple horizons with an
+exponentially-decaying weight \(\lambda\):</p>
+
+\[A_t^{GAE(\gamma,\lambda)} = \sum_{l=0}^{\infty} (\gamma\lambda)^l \delta_{t+l} = \delta_t + \gamma\lambda \, A_{t+1}^{GAE(\gamma,\lambda)}\]
+
+<p>The recursive form on the right is what's implemented: compute \(\delta_t\) at every
+step, then sweep backward through the trajectory accumulating
+\(A_t = \delta_t + \gamma\lambda A_{t+1}\) (with \(A_T = 0\) at the trajectory's end,
+since there is no future beyond the last generated token). \(\lambda=1\) recovers the
+full Monte-Carlo advantage (\(A_t = \sum_{l\ge0}\gamma^l r_{t+l} - V(s_t)\), high variance,
+low bias); \(\lambda=0\) recovers the one-step TD advantage (\(A_t = \delta_t\), low
+variance, high bias). Intermediate \(\lambda\) (0.95 here) interpolates.</p>
+
+<h3>The Clipped Surrogate Objective</h3>
+
+<p>Vanilla policy gradient (\(\mathbb{E}[\nabla_\theta \log \pi_\theta(a|s) \, A]\)) is only
+valid for an infinitesimally small policy update — after any real gradient step, the
+distribution used to <em>collect</em> the rollout (the "old" policy \(\pi_{old}\)) and the
+distribution being <em>updated</em> (\(\pi_\theta\)) have diverged, invalidating the
+on-policy assumption. PPO's fix is to reuse the same rollout for several gradient steps
+via importance sampling, but clip the importance ratio so a single step can't move the
+policy arbitrarily far from \(\pi_{old}\):</p>
+
+\[r_t(\theta) = \frac{\pi_\theta(a_t|s_t)}{\pi_{old}(a_t|s_t)}, \qquad
+\mathcal{L}^{CLIP}(\theta) = -\mathbb{E}_t\Big[\min\big(r_t(\theta)\,A_t,\; \mathrm{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon)\,A_t\big)\Big]\]
+
+<div class="definition">
+<strong>Why the min, not just the clip?</strong> Taking the min of the clipped and unclipped
+terms makes the objective <em>pessimistic</em>: if the ratio has moved past the clip range
+in the direction that <em>would increase</em> the objective, the clipped term (which no
+longer has gradient signal pushing the ratio further) is used, capping the incentive to keep
+pushing that action's probability up or down beyond the trust region. But if the ratio has
+moved past the clip range in a direction that <em>decreases</em> the objective (e.g. the
+policy previously moved probability mass away from a good action too far), the unclipped
+term is smaller (more negative) and is used instead — so clipping never protects the policy
+from being pushed back, only from being pushed further in an already-adopted direction.
+Concretely: with positive advantage, clipping bounds how much probability mass can be added
+to a good action; with negative advantage, clipping bounds how much can be removed from a
+bad action — in both cases, once the ratio leaves \([1-\epsilon, 1+\epsilon]\).</div>
+
+<h3>Why a Value Function Is Needed</h3>
+
+<p>Without a value baseline, the advantage collapses to the raw discounted return, which has
+much higher variance (it includes the variance of every future token's stochastic sampling
+and reward, not just the current action's marginal contribution). A learned \(V(s_t)\)
+absorbs the state-dependent part of the return, leaving the advantage to isolate the
+action's marginal effect — this is the standard variance-reduction argument for
+actor-critic methods generally, not specific to PPO.</p>
+
+<h3>Why PPO Is Comparatively Complex and Fragile</h3>
+
+<p>Relative to SFT or DPO (Section 7), PPO requires maintaining and coordinating <strong>four</strong>
+models simultaneously: the policy being trained, a frozen reference policy (for the KL
+penalty), a frozen reward model (for the terminal reward), and a value function (often
+sharing weights with the policy, as here). Each rollout is an autoregressive generation
+loop (expensive relative to a single forward pass), and training is sensitive to several
+interacting hyperparameters (\(\beta\), \(\epsilon\), GAE's \(\lambda\), the relative
+learning rates of policy vs. value head) — a poor setting of any one can produce reward
+hacking, KL blowup (policy diverges from anything fluent), or value function collapse
+(advantages become uninformative). This fragility, not any flaw in the underlying objective,
+is the primary practical motivation for DPO (Section 7), which optimizes the same
+KL-constrained objective without rollouts, a reward model, or a value function.</p>
+
+<div class="keyfacts">
+<strong>Key Facts — Section 6</strong>
+<ul>
+  <li>PPO maximizes expected reward minus a KL penalty to the frozen SFT policy — reward
+  alone would reward-hack (Section 5); the KL term bounds how far the policy can drift.</li>
+  <li>GAE trades off bias and variance in the advantage estimate via \(\lambda\); it reduces
+  to Monte-Carlo return at \(\lambda=1\) and one-step TD at \(\lambda=0\).</li>
+  <li>The clipped surrogate objective lets a single rollout be reused for several gradient
+  steps (needed because true on-policy REINFORCE would need a fresh rollout per step) while
+  bounding how far any one update can move the policy from \(\pi_{old}\).</li>
+  <li>PPO's operational complexity (4 coordinated models, sensitive hyperparameters) is the
+  main practical argument for DPO when a reward model isn't otherwise needed.</li>
 </ul>
 </div>
 
