@@ -241,7 +241,118 @@ future-token information into an earlier position's output?
 
 """))
 
-# Parts 3-5 are appended here.
+# ─── PART 3: FULL GPT MODEL ──────────────────────────────────────────────────
+cells.append(md("""
+---
+## Part 3: Full GPT Model
+
+Assembles token + position embeddings, the block stack, and a tied LM head.
+See `docs/llm_training_pipeline_reference.html#s2` for why the embedding and
+LM head weights are tied.
+"""))
+
+cells.append(code("""
+class GPTModel(nn.Module):
+    def __init__(self, config: GPTConfig):
+        super().__init__()
+        self.config = config
+        self.tok_emb = nn.Embedding(config.vocab_size, config.n_embd)
+        self.pos_emb = nn.Embedding(config.block_size, config.n_embd)
+        self.drop = nn.Dropout(config.dropout)
+        self.blocks = nn.ModuleList([Block(config) for _ in range(config.n_layer)])
+        self.ln_f = nn.LayerNorm(config.n_embd)
+        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        self.lm_head.weight = self.tok_emb.weight  # weight tying
+
+        self.apply(self._init_weights)
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+
+    def forward(self, idx, targets=None):
+        B, T = idx.shape
+        assert T <= self.config.block_size, f"sequence length {T} > block_size {self.config.block_size}"
+        pos = torch.arange(T, device=idx.device).unsqueeze(0)
+
+        x = self.tok_emb(idx) + self.pos_emb(pos)
+        x = self.drop(x)
+        for block in self.blocks:
+            x = block(x)
+        x = self.ln_f(x)
+        logits = self.lm_head(x)
+
+        loss = None
+        if targets is not None:
+            loss = F.cross_entropy(
+                logits.reshape(-1, logits.size(-1)), targets.reshape(-1), ignore_index=-100
+            )
+        return logits, loss
+
+    @torch.no_grad()
+    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
+        self.eval()
+        for _ in range(max_new_tokens):
+            idx_cond = idx[:, -self.config.block_size:]
+            logits, _ = self(idx_cond)
+            logits = logits[:, -1, :] / temperature
+            if top_k is not None:
+                v, _ = torch.topk(logits, top_k)
+                logits[logits < v[:, [-1]]] = float("-inf")
+            probs = F.softmax(logits, dim=-1)
+            next_id = torch.multinomial(probs, num_samples=1)
+            idx = torch.cat([idx, next_id], dim=1)
+        return idx
+"""))
+
+cells.append(code("""
+# TEST 3: param count, gradient flow, generate() shape
+torch.manual_seed(0)
+test_cfg = GPTConfig(vocab_size=100, block_size=16, n_layer=2, n_head=2, n_embd=32, dropout=0.0)
+model = GPTModel(test_cfg)
+n_params = sum(p.numel() for p in model.parameters())
+print(f"param count: {n_params:,}")
+assert n_params > 0
+
+B, T = 4, 16
+idx = torch.randint(0, test_cfg.vocab_size, (B, T))
+targets = torch.randint(0, test_cfg.vocab_size, (B, T))
+logits, loss = model(idx, targets)
+assert logits.shape == (B, T, test_cfg.vocab_size)
+print(f"TEST 3a PASSED — logits shape {tuple(logits.shape)}, loss {loss.item():.3f}")
+
+loss.backward()
+n_with_grad = sum(1 for p in model.parameters() if p.grad is not None and p.grad.abs().sum() > 0)
+n_total = sum(1 for p in model.parameters())
+assert n_with_grad == n_total, f"only {n_with_grad}/{n_total} params received gradient"
+print(f"TEST 3b PASSED — all {n_total} parameters received gradient")
+
+out = model.generate(idx[:, :4], max_new_tokens=5)
+assert out.shape == (B, 4 + 5)
+print(f"TEST 3c PASSED — generate() output shape {tuple(out.shape)}")
+
+print("TEST 3 PASSED")
+"""))
+
+cells.append(md("""
+### Question 3
+
+The `_init_weights` method initializes every `nn.Linear` and `nn.Embedding`
+weight from `N(0, 0.02^2)`, independent of the layer's fan-in. A classic
+"Xavier/Glorot" initialization instead scales the variance by `1/fan_in`.
+Given that this model uses pre-norm residual blocks (LayerNorm re-normalizes
+the input to every sub-layer), why might a fixed small std work fine here
+even though it ignores fan-in?
+
+*Write your answer below:*
+
+"""))
+
+# Parts 4-5 are appended here.
 
 # ─── WRITE ───────────────────────────────────────────────────────────────────
 nb['cells'] = cells
