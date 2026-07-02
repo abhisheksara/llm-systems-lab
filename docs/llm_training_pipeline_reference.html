@@ -48,6 +48,7 @@ re-derived here.</em></p>
   <a href="#s4">4. SFT</a>
   <a href="#s5">5. Reward Modeling</a>
   <a href="#s6">6. PPO / RLHF</a>
+  <a href="#s7">7. DPO</a>
 </nav>
 
 <!-- ============================================================ -->
@@ -543,6 +544,111 @@ KL-constrained objective without rollouts, a reward model, or a value function.<
   bounding how far any one update can move the policy from \(\pi_{old}\).</li>
   <li>PPO's operational complexity (4 coordinated models, sensitive hyperparameters) is the
   main practical argument for DPO when a reward model isn't otherwise needed.</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s7">7. Direct Preference Optimization (DPO)</h2>
+
+<p>PPO (Section 6) solves the KL-constrained reward-maximization objective indirectly: fit
+a reward model, then run an RL loop to optimize a policy against it. DPO (Rafailov et al.
+2023, "Direct Preference Optimization: Your Language Model is Secretly a Reward Model")
+observes that the <em>same</em> objective has a closed-form solution, letting it be
+optimized directly from preference data with a single supervised-style loss — no reward
+model, no rollouts, no value function.</p>
+
+<h3>The Closed-Form Optimal Policy</h3>
+
+<p>Start from exactly Section 6's objective, for a <em>fixed</em> reward function \(r\):</p>
+
+\[\max_\pi \; \mathbb{E}_{y \sim \pi(\cdot|x)}\big[r(x, y)\big] - \beta \, \mathrm{KL}\big(\pi(\cdot|x) \,\|\, \pi_{ref}(\cdot|x)\big)\]
+
+<div class="proof-toggle" onclick="toggleProof('proof-dpo-closed-form')">▶ Derivation of the closed-form optimum (click to expand)</div>
+<div class="proof-body" id="proof-dpo-closed-form">
+<p>Expand the KL term and rewrite the objective as a single expectation over \(\pi\):</p>
+\[\mathbb{E}_{y\sim\pi}\Big[r(x,y) - \beta\log\frac{\pi(y|x)}{\pi_{ref}(y|x)}\Big]
+= -\beta\,\mathbb{E}_{y\sim\pi}\Big[\log\frac{\pi(y|x)}{\pi_{ref}(y|x)\exp(r(x,y)/\beta)}\Big]\]
+<p>Define \(Z(x) = \sum_y \pi_{ref}(y|x)\exp(r(x,y)/\beta)\) (a normalizing constant — it
+does not depend on \(\pi\), only on \(x\), \(\pi_{ref}\), and \(r\)). Then
+\(\pi_{ref}(y|x)\exp(r(x,y)/\beta) = Z(x)\cdot\frac{\pi_{ref}(y|x)\exp(r(x,y)/\beta)}{Z(x)}\),
+and the bracketed fraction inside the log becomes
+\(\pi(y|x) \big/ \big(Z(x)\cdot\pi^*(y|x)\big)\) where
+\(\pi^*(y|x) := \pi_{ref}(y|x)\exp(r(x,y)/\beta)/Z(x)\) is a valid probability
+distribution (it's non-negative and sums to 1 by construction). Substituting:</p>
+\[-\beta\,\mathbb{E}_{y\sim\pi}\Big[\log\frac{\pi(y|x)}{\pi^*(y|x)}\Big] - \beta\log Z(x)
+= -\beta\,\mathrm{KL}\big(\pi(\cdot|x) \,\|\, \pi^*(\cdot|x)\big) - \beta\log Z(x)\]
+<p>\(Z(x)\) doesn't depend on \(\pi\), so maximizing this over \(\pi\) is exactly
+minimizing \(\mathrm{KL}(\pi\|\pi^*)\), which is minimized (to zero) exactly when
+\(\pi = \pi^*\). So the objective's unique maximizer is:</p>
+\[\pi^*(y|x) = \frac{1}{Z(x)}\,\pi_{ref}(y|x)\,\exp\!\Big(\frac{r(x,y)}{\beta}\Big)\]
+</div>
+
+<h3>Solving for the Reward, and Why \(Z(x)\) Doesn't Matter</h3>
+
+<p>Rearranging the closed-form solution for \(r\) in terms of \(\pi^*\):</p>
+
+\[r(x, y) = \beta \log\frac{\pi^*(y|x)}{\pi_{ref}(y|x)} + \beta \log Z(x)\]
+
+<p>This says: <strong>any reward function's optimal policy implicitly defines that reward
+function</strong>, up to the intractable per-prompt constant \(\beta\log Z(x)\) (an
+implicit reward relationship, not a coincidence — hence the paper's title, "your language
+model is secretly a reward model"). Substitute this expression for \(r\) directly into the
+Bradley-Terry pairwise loss (Section 5), for the chosen/rejected pair \((y_w, y_l)\) sharing
+the same prompt \(x\):</p>
+
+\[r(x,y_w) - r(x,y_l) = \beta\Big[\log\frac{\pi^*(y_w|x)}{\pi_{ref}(y_w|x)} - \log\frac{\pi^*(y_l|x)}{\pi_{ref}(y_l|x)}\Big]\]
+
+<p>The \(\beta\log Z(x)\) terms are identical for \(y_w\) and \(y_l\) (same prompt \(x\)) and
+cancel exactly in the difference — this is <em>why</em> the intractable normalizer never
+needs to be computed. Substituting into
+\(\mathcal{L}_{RM} = -\log\sigma(r(x,y_w) - r(x,y_l))\) and replacing the unknown optimal
+\(\pi^*\) with a directly-trained policy \(\pi_\theta\) gives the final DPO loss:</p>
+
+\[\mathcal{L}_{DPO}(\theta) = -\mathbb{E}_{(x,y_w,y_l)}\left[\log\sigma\!\left(\beta\Big[\log\frac{\pi_\theta(y_w|x)}{\pi_{ref}(y_w|x)} - \log\frac{\pi_\theta(y_l|x)}{\pi_{ref}(y_l|x)}\Big]\right)\right]\]
+
+<p>No reward model is ever fit; no rollouts are ever sampled. \(\pi_\theta\) starts as a
+copy of \(\pi_{ref}\) (the SFT policy) and is updated directly by gradient descent on this
+loss, using only the same preference pairs a reward model would have been trained on.</p>
+
+<h3>\(\beta\)'s Role</h3>
+
+<p>\(\beta\) plays the identical regularization role here as in PPO's KL penalty — it comes
+from the exact same objective, so this is expected, not a coincidence. Examine the
+gradient of \(\mathcal{L}_{DPO}\) with respect to \(\theta\): it scales each example's
+gradient contribution by \(\beta\,\sigma\big(-\beta[\Delta_w - \Delta_l]\big)\) where
+\(\Delta = \log(\pi_\theta/\pi_{ref})\) — a small \(\beta\) shrinks gradient magnitude but
+also makes the sigmoid's "how wrong is this pair currently" signal weaker (the model can
+drift further in log-prob space before the loss saturates near zero), while a large
+\(\beta\) makes the sigmoid saturate quickly, tightly holding \(\pi_\theta\) close to
+\(\pi_{ref}\).</p>
+
+<h3>When PPO Might Still Be Preferred</h3>
+
+<p>DPO requires a fixed, pre-collected preference dataset — it cannot generate new
+completions and get them scored during training the way PPO can via its live reward model.
+If the reward signal is more naturally expressed as an explicit, queryable function (a
+reward model that can score <em>any</em> completion an evolving policy produces, including
+ones far outside the original preference dataset's distribution), PPO's online loop can
+explore into and correct regions of output space the fixed DPO dataset never covered.
+This matters more as training runs longer or the policy's distribution shifts further from
+\(\pi_{ref}\) — DPO's preference pairs, generated once from the reference policy, become
+progressively less representative of what the current policy would actually generate.</p>
+
+<div class="keyfacts">
+<strong>Key Facts — Section 7</strong>
+<ul>
+  <li>DPO solves the same KL-constrained objective as PPO — the derivation shows the
+  optimal policy for <em>any</em> reward function has the closed form
+  \(\pi^* \propto \pi_{ref}\exp(r/\beta)\).</li>
+  <li>Inverting this relationship substitutes an implicit, policy-derived reward into the
+  Bradley-Terry loss; the intractable partition function \(Z(x)\) cancels in the
+  chosen-vs-rejected difference, which is what makes the loss tractable.</li>
+  <li>DPO needs no reward model, no rollouts, and no value function — it is a single
+  closed-form loss over static preference pairs.</li>
+  <li>\(\beta\) plays the same regularization role as PPO's KL penalty, derived from the
+  same underlying objective.</li>
+  <li>PPO's online rollouts can still be preferable when the policy needs to explore beyond
+  what a fixed, pre-collected preference dataset covers.</li>
 </ul>
 </div>
 
