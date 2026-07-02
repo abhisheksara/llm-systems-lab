@@ -352,7 +352,53 @@ even though it ignores fan-in?
 
 """))
 
-# Parts 4-5 are appended here.
+# ─── PART 4: DATA LOADING & PACKING ──────────────────────────────────────────
+cells.append(md("""
+---
+## Part 4: Data Loading & Packing
+
+Concatenate all stories (each followed by the end-of-text token) into one
+long token stream, then chop it into fixed-length `(block_size + 1)` chunks.
+See `docs/llm_training_pipeline_reference.html#s3` for why packing is done
+this way instead of padding each story individually. This cell takes
+~60-90s (encoding 50,000 stories one at a time).
+"""))
+
+cells.append(code("""
+def pack_into_blocks(texts, tokenizer, eot_id, block_size):
+    all_ids = []
+    for t in texts:
+        all_ids.extend(tokenizer.encode(t).ids)
+        all_ids.append(eot_id)
+    n_blocks = len(all_ids) // (block_size + 1)
+    packed = torch.tensor(
+        all_ids[:n_blocks * (block_size + 1)], dtype=torch.long
+    ).view(n_blocks, block_size + 1)
+    return packed
+
+BLOCK_SIZE = 256
+t0 = time.time()
+data = pack_into_blocks(texts, tokenizer, EOT_ID, BLOCK_SIZE)
+print(f"Packed {data.shape[0]} blocks of size {data.shape[1]} in {time.time()-t0:.1f}s")
+"""))
+
+cells.append(code("""
+# TEST 4: packing shape and shift-consistency checks
+assert data.shape[1] == BLOCK_SIZE + 1
+assert data.dtype == torch.long
+assert data.max().item() < tokenizer.get_vocab_size(), "packed token id exceeds vocab size"
+assert data.min().item() >= 0
+
+x, y = data[:, :-1], data[:, 1:]
+assert x.shape == (data.shape[0], BLOCK_SIZE)
+assert y.shape == (data.shape[0], BLOCK_SIZE)
+# y at position i must equal x at position i+1 (the shift-by-one target relationship)
+assert torch.equal(x[:, 1:], y[:, :-1]), "x/y are not a valid shifted pair"
+print(f"TEST 4 PASSED — {data.shape[0]} blocks, shift relationship verified, "
+      f"max token id {data.max().item()} < vocab size {tokenizer.get_vocab_size()}")
+"""))
+
+# Part 5 is appended here.
 
 # ─── WRITE ───────────────────────────────────────────────────────────────────
 nb['cells'] = cells
