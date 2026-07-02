@@ -364,7 +364,180 @@ additional evidence (beyond the reward number) would you want before concluding 
 
 """))
 
-# Parts 3-4 are appended here.
+# ─── PART 3: PPO CORE ────────────────────────────────────────────────────────
+cells.append(md("""
+---
+## Part 3: PPO Core
+
+Implements the pieces from `docs/llm_training_pipeline_reference.html#s6`: an actor-critic
+wrapper around the policy (adds a value head without modifying `GPTModel`), rollout
+generation that records both the policy's and a frozen reference model's log-probabilities
+at each sampled token, GAE, and the clipped surrogate objective. Every piece is tested
+against a hand-computed toy example before being used in the training loop (Part 4).
+"""))
+
+cells.append(code("""
+class PPOActorCritic(nn.Module):
+    \"\"\"Wraps a GPTModel, exposing both LM logits and a per-position scalar value
+    estimate. Reuses the wrapped model's tok_emb/pos_emb/drop/blocks/ln_f/lm_head
+    directly — no changes to src/llm_pipeline/model.py.\"\"\"
+    def __init__(self, gpt: GPTModel):
+        super().__init__()
+        self.gpt = gpt
+        self.value_head = nn.Linear(gpt.config.n_embd, 1, bias=False)
+        nn.init.normal_(self.value_head.weight, mean=0.0, std=0.02)
+
+    def forward(self, idx):
+        B, T = idx.shape
+        pos = torch.arange(T, device=idx.device).unsqueeze(0)
+        x = self.gpt.tok_emb(idx) + self.gpt.pos_emb(pos)
+        x = self.gpt.drop(x)
+        for block in self.gpt.blocks:
+            x = block(x)
+        x = self.gpt.ln_f(x)
+        logits = self.gpt.lm_head(x)
+        values = self.value_head(x).squeeze(-1)  # (B, T)
+        return logits, values
+"""))
+
+cells.append(code("""
+@torch.no_grad()
+def generate_rollout(actor_critic, ref_model, prompt_ids, max_new_tokens, temperature, top_k, block_size):
+    \"\"\"Samples max_new_tokens autoregressively from actor_critic, recording the
+    policy's log-prob, the frozen ref_model's log-prob, and the value estimate at
+    each sampled token. Returns (idx, policy_logprobs, ref_logprobs, values), each
+    of shape (B, max_new_tokens) except idx which is (B, prompt_len + max_new_tokens).\"\"\"
+    idx = prompt_ids.clone()
+    policy_logprobs, ref_logprobs, values = [], [], []
+    for _ in range(max_new_tokens):
+        idx_cond = idx[:, -block_size:]
+        logits, vals = actor_critic(idx_cond)
+        logits_last = logits[:, -1, :] / temperature
+        if top_k is not None:
+            v, _ = torch.topk(logits_last, top_k)
+            logits_last[logits_last < v[:, [-1]]] = float("-inf")
+        probs = F.softmax(logits_last, dim=-1)
+        next_id = torch.multinomial(probs, num_samples=1)
+        policy_lp = F.log_softmax(logits_last, dim=-1).gather(1, next_id).squeeze(-1)
+
+        ref_logits, _ = ref_model(idx_cond)
+        ref_lp = F.log_softmax(ref_logits[:, -1, :], dim=-1).gather(1, next_id).squeeze(-1)
+
+        idx = torch.cat([idx, next_id], dim=1)
+        policy_logprobs.append(policy_lp)
+        ref_logprobs.append(ref_lp)
+        values.append(vals[:, -1])
+    return (
+        idx,
+        torch.stack(policy_logprobs, dim=1),
+        torch.stack(ref_logprobs, dim=1),
+        torch.stack(values, dim=1),
+    )
+
+
+def compute_token_rewards(policy_logprobs, ref_logprobs, terminal_reward, kl_beta):
+    \"\"\"Per-token reward = -kl_beta * KL at every step, plus terminal_reward added
+    only at the last generated token (the reward model scores whole completions).
+    Returns (rewards, kl), both (B, T).\"\"\"
+    kl = policy_logprobs - ref_logprobs
+    rewards = -kl_beta * kl
+    rewards = rewards.clone()
+    rewards[:, -1] = rewards[:, -1] + terminal_reward
+    return rewards, kl
+
+
+def compute_gae(rewards, values, gamma=1.0, lam=0.95):
+    \"\"\"rewards, values: (B, T). Returns (advantages, returns), both (B, T).
+    Bootstraps with a next_value of 0 beyond the last generated token (episode end).\"\"\"
+    B, T = rewards.shape
+    advantages = torch.zeros_like(rewards)
+    last_gae = torch.zeros(B, device=rewards.device)
+    next_value = torch.zeros(B, device=rewards.device)
+    for t in reversed(range(T)):
+        delta = rewards[:, t] + gamma * next_value - values[:, t]
+        last_gae = delta + gamma * lam * last_gae
+        advantages[:, t] = last_gae
+        next_value = values[:, t]
+    returns = advantages + values
+    return advantages, returns
+
+
+def ppo_clipped_loss(new_logprobs, old_logprobs, advantages, clip_eps=0.2):
+    ratio = torch.exp(new_logprobs - old_logprobs)
+    unclipped = ratio * advantages
+    clipped = torch.clamp(ratio, 1 - clip_eps, 1 + clip_eps) * advantages
+    return -torch.min(unclipped, clipped).mean()
+
+
+def evaluate_actions(policy, idx, prompt_len, gen_len):
+    \"\"\"Re-runs the (now-updated) policy over the full generated sequence and
+    extracts log-probs and values at exactly the positions/tokens that were
+    sampled during the rollout. Returns (logprobs, values), both (B, gen_len).\"\"\"
+    logits, values = policy(idx[:, :-1])
+    action_logits = logits[:, prompt_len - 1 : prompt_len - 1 + gen_len, :]
+    action_values = values[:, prompt_len - 1 : prompt_len - 1 + gen_len]
+    actions = idx[:, prompt_len : prompt_len + gen_len]
+    logprobs = F.log_softmax(action_logits, dim=-1).gather(-1, actions.unsqueeze(-1)).squeeze(-1)
+    return logprobs, action_values
+"""))
+
+cells.append(code("""
+# TEST 5: GAE against a hand-computed toy trajectory (gamma=1, lambda=1 -> Monte Carlo advantage)
+rewards = torch.tensor([[1.0, 0.0, 2.0]])
+values = torch.tensor([[0.5, 0.5, 0.5]])
+adv, ret = compute_gae(rewards, values, gamma=1.0, lam=1.0)
+# hand derivation: return_t = sum of rewards from t onward; advantage_t = return_t - value_t
+# return_2 = 2.0 -> adv_2 = 2.0 - 0.5 = 1.5
+# return_1 = 0.0 + 2.0 = 2.0 -> adv_1 = 2.0 - 0.5 = 1.5
+# return_0 = 1.0 + 0.0 + 2.0 = 3.0 -> adv_0 = 3.0 - 0.5 = 2.5
+expected_adv = torch.tensor([[2.5, 1.5, 1.5]])
+expected_ret = torch.tensor([[3.0, 2.0, 2.0]])
+assert torch.allclose(adv, expected_adv, atol=1e-5), f"{adv} != {expected_adv}"
+assert torch.allclose(ret, expected_ret, atol=1e-5), f"{ret} != {expected_ret}"
+print("TEST 5 PASSED — GAE matches hand-computed toy trajectory")
+"""))
+
+cells.append(code("""
+# TEST 6: clipped surrogate objective at the clip boundary (both advantage signs)
+clip_eps = 0.2
+old_lp = torch.tensor([0.0, 0.0])
+
+new_lp_high = torch.log(torch.tensor([1.3, 1.3]))  # ratio = 1.3 -> clipped to 1.2
+adv_pos = torch.tensor([1.0, 1.0])
+loss_pos = ppo_clipped_loss(new_lp_high, old_lp, adv_pos, clip_eps)
+# unclipped = 1.3*1 = 1.3, clipped = 1.2*1 = 1.2, min = 1.2, loss = -1.2
+assert abs(loss_pos.item() - (-1.2)) < 1e-4, f"expected -1.2, got {loss_pos.item()}"
+print(f"TEST 6a PASSED — positive-advantage clip boundary uses the clipped (pessimistic) term: loss={loss_pos.item():.4f}")
+
+new_lp_low = torch.log(torch.tensor([0.7, 0.7]))  # ratio = 0.7 -> clipped to 0.8
+adv_neg = torch.tensor([-1.0, -1.0])
+loss_neg = ppo_clipped_loss(new_lp_low, old_lp, adv_neg, clip_eps)
+# unclipped = 0.7*-1 = -0.7, clipped = 0.8*-1 = -0.8, min(-0.7,-0.8) = -0.8, loss = 0.8
+assert abs(loss_neg.item() - 0.8) < 1e-4, f"expected 0.8, got {loss_neg.item()}"
+print(f"TEST 6b PASSED — negative-advantage clip boundary uses the clipped (pessimistic) term: loss={loss_neg.item():.4f}")
+
+# Sanity: an unclipped ratio (inside [0.8, 1.2]) must equal ratio * advantage exactly.
+new_lp_mid = torch.log(torch.tensor([1.05, 1.05]))
+loss_mid = ppo_clipped_loss(new_lp_mid, old_lp, adv_pos, clip_eps)
+assert abs(loss_mid.item() - (-1.05)) < 1e-4, f"expected -1.05, got {loss_mid.item()}"
+print(f"TEST 6c PASSED — ratio inside the clip range is left unclipped: loss={loss_mid.item():.4f}")
+"""))
+
+cells.append(md("""
+### Question 3
+
+`compute_token_rewards` adds the reward model's terminal score only at the *last*
+generated token, while the KL penalty is subtracted at *every* token. If a completion is
+very long, the cumulative KL penalty (summed via the recursive GAE backup) can end up
+comparable in magnitude to the one-time terminal reward. What effect would you expect this
+to have on a PPO run with an unusually large `max_new_tokens`, and why does that argue for
+keeping completions short in this pipeline's setting?
+
+*Write your answer below:*
+
+"""))
+
+# Part 4 is appended here.
 
 # ─── WRITE ───────────────────────────────────────────────────────────────────
 nb['cells'] = cells
