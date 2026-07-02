@@ -70,7 +70,75 @@ base_model.load_state_dict(ckpt['model_state_dict'])
 print(f"Loaded base_model.pt — {sum(p.numel() for p in base_model.parameters()):,} params")
 """))
 
-# Parts 1-3 are appended here by Tasks 4-6.
+# ─── PART 1: INSTRUCTION DATASET ─────────────────────────────────────────────
+cells.append(md("""
+---
+## Part 1: Instruction Dataset Construction
+
+TinyStories has no built-in `(prompt, response)` structure. We synthesize one:
+for each story, we heuristically extract a "topic" (a keyword the story is
+actually about, from a fixed vocabulary of ~40 common TinyStories nouns), then
+frame the story as the answer to `"Write a short story about {topic}:\\n"`.
+Stories where no keyword matches are dropped.
+"""))
+
+cells.append(code("""
+from datasets import load_dataset
+
+TOPIC_KEYWORDS = [
+    "dog", "cat", "girl", "boy", "forest", "ball", "tree", "bird", "star",
+    "friend", "monster", "princess", "dragon", "robot", "garden", "park",
+    "school", "castle", "rabbit", "mouse", "flower", "boat", "river",
+    "mountain", "farm", "toy", "bear", "fish", "sun", "moon", "rain",
+    "snow", "house", "family", "birthday", "picnic", "adventure", "magic",
+    "kite", "puppy",
+]
+
+def extract_topic(story):
+    lower = story.lower()
+    for kw in TOPIC_KEYWORDS:
+        if kw in lower:
+            return kw
+    return None
+
+def format_sft_prompt(topic):
+    return f"Write a short story about {topic}:\\n"
+
+print("Loading TinyStories (train[:50000]) for SFT pair construction...")
+ds = load_dataset('roneneldan/TinyStories', split='train[:50000]')
+sft_pairs = []
+for x in ds:
+    topic = extract_topic(x['text'])
+    if topic is not None:
+        sft_pairs.append((topic, x['text']))
+print(f"{len(sft_pairs)} / {len(ds)} stories matched a topic keyword")
+"""))
+
+cells.append(code("""
+# TEST 1: extraction determinism + prompt formatting + coverage sanity
+assert extract_topic("A brave dog ran through the yard.") == "dog"
+assert extract_topic("The weather was strange that day with no mentioned nouns.") is None
+assert format_sft_prompt("dragon") == "Write a short story about dragon:\\n"
+assert len(sft_pairs) > 10000, f"expected >10000 matched pairs, got {len(sft_pairs)}"
+for topic, story in sft_pairs[:3]:
+    assert topic in story.lower()
+print(f"TEST 1 PASSED — {len(sft_pairs)} pairs, extraction verified on samples")
+"""))
+
+cells.append(md("""
+### Question 1
+
+`extract_topic` returns the **first** matching keyword found by scanning
+`TOPIC_KEYWORDS` in a fixed order, even if a story matches several keywords
+(e.g. a story about both a "dog" and a "park"). Is this a problem for
+training a model to follow the `"Write a short story about {topic}:\\n"`
+instruction? What would you check to find out?
+
+*Write your answer below:*
+
+"""))
+
+# Parts 2-3 are appended here.
 
 # ─── WRITE ───────────────────────────────────────────────────────────────────
 nb['cells'] = cells
