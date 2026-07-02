@@ -183,7 +183,129 @@ loss favors, independent of which one is actually better? What would change if
 
 """))
 
-# Parts 2-3 are appended here.
+# ─── PART 2: DPO TRAINING LOOP ───────────────────────────────────────────────
+cells.append(md("""
+---
+## Part 2: DPO Training Loop
+
+`dpo_policy` starts as a copy of `sft_model` and is the only model updated; `ref_model` is
+a frozen copy of `sft_model`, exactly the same reference used by PPO in Part 3 — same
+starting point, different optimization procedure. Trains for 300 steps at `beta=0.1`.
+"""))
+
+cells.append(code("""
+dpo_policy = copy.deepcopy(sft_model).to(device)
+ref_model = copy.deepcopy(sft_model).to(device)
+for p in ref_model.parameters():
+    p.requires_grad_(False)
+ref_model.eval()
+
+held_out_pairs = preference_pairs[-30:]
+train_pairs = preference_pairs[:-30]
+print(f"{len(train_pairs)} training pairs, {len(held_out_pairs)} held-out pairs")
+
+def make_dpo_batch(pairs, batch_size):
+    idx = torch.randint(0, len(pairs), (batch_size,))
+    chosen = [tokenize_prompt_response(pairs[i]['prompt'], pairs[i]['chosen'], tokenizer, EOT_ID, BLOCK_SIZE) for i in idx]
+    rejected = [tokenize_prompt_response(pairs[i]['prompt'], pairs[i]['rejected'], tokenizer, EOT_ID, BLOCK_SIZE) for i in idx]
+    c_ids = torch.stack([c[0] for c in chosen]).to(device)
+    c_labels = torch.stack([c[1] for c in chosen]).to(device)
+    r_ids = torch.stack([r[0] for r in rejected]).to(device)
+    r_labels = torch.stack([r[1] for r in rejected]).to(device)
+    return c_ids, c_labels, r_ids, r_labels
+"""))
+
+cells.append(code("""
+dpo_steps = 300
+dpo_lr = 5e-6
+dpo_batch_size = 16
+beta = 0.1
+
+opt = torch.optim.AdamW(dpo_policy.parameters(), lr=dpo_lr)
+losses = []
+t0 = time.time()
+for step in range(dpo_steps):
+    c_ids, c_labels, r_ids, r_labels = make_dpo_batch(train_pairs, dpo_batch_size)
+
+    policy_chosen_lp = sequence_logprob(dpo_policy, c_ids, c_labels)
+    policy_rejected_lp = sequence_logprob(dpo_policy, r_ids, r_labels)
+    with torch.no_grad():
+        ref_chosen_lp = sequence_logprob(ref_model, c_ids, c_labels)
+        ref_rejected_lp = sequence_logprob(ref_model, r_ids, r_labels)
+
+    loss = dpo_loss(policy_chosen_lp, policy_rejected_lp, ref_chosen_lp, ref_rejected_lp, beta)
+    opt.zero_grad()
+    loss.backward()
+    torch.nn.utils.clip_grad_norm_(dpo_policy.parameters(), 1.0)
+    opt.step()
+    losses.append(loss.item())
+    if step % 50 == 0 or step == dpo_steps - 1:
+        print(f"step {step:4d} | loss {loss.item():.3f} | elapsed {time.time()-t0:.0f}s")
+print(f"DPO training elapsed: {time.time()-t0:.1f}s")
+"""))
+
+cells.append(code("""
+plt.figure(figsize=(8, 4))
+plt.plot(losses, alpha=0.6, label="per-step DPO loss")
+window = 20
+smoothed = [sum(losses[max(0,i-window):i+1]) / len(losses[max(0,i-window):i+1]) for i in range(len(losses))]
+plt.plot(smoothed, label=f"{window}-step moving average", linewidth=2)
+plt.xlabel("step"); plt.ylabel("DPO loss"); plt.title("DPO training loss")
+plt.legend(); plt.tight_layout(); plt.show()
+"""))
+
+cells.append(code("""
+# TEST 3: loss decreased, and the implicit reward margin widens on held-out pairs
+first_20_avg = sum(losses[:20]) / 20
+last_20_avg = sum(losses[-20:]) / 20
+print(f"first-20-step avg loss: {first_20_avg:.3f}, last-20-step avg loss: {last_20_avg:.3f}")
+assert last_20_avg < first_20_avg, "DPO loss did not decrease over training"
+
+@torch.no_grad()
+def dpo_reward_margin(policy, ref, pairs):
+    \"\"\"Mean of (policy_chosen_lp - policy_rejected_lp) - (ref_chosen_lp - ref_rejected_lp)
+    over a set of pairs — the implicit reward margin DPO is optimizing (Section 7).\"\"\"
+    margins = []
+    for p in pairs:
+        c_ids, c_labels = tokenize_prompt_response(p['prompt'], p['chosen'], tokenizer, EOT_ID, BLOCK_SIZE)
+        r_ids, r_labels = tokenize_prompt_response(p['prompt'], p['rejected'], tokenizer, EOT_ID, BLOCK_SIZE)
+        c_ids, c_labels = c_ids.unsqueeze(0).to(device), c_labels.unsqueeze(0).to(device)
+        r_ids, r_labels = r_ids.unsqueeze(0).to(device), r_labels.unsqueeze(0).to(device)
+        pc = sequence_logprob(policy, c_ids, c_labels).item()
+        pr = sequence_logprob(policy, r_ids, r_labels).item()
+        rc = sequence_logprob(ref, c_ids, c_labels).item()
+        rr = sequence_logprob(ref, r_ids, r_labels).item()
+        margins.append((pc - pr) - (rc - rr))
+    return sum(margins) / len(margins)
+
+margin_before = dpo_reward_margin(sft_model, ref_model, held_out_pairs)
+margin_after = dpo_reward_margin(dpo_policy, ref_model, held_out_pairs)
+print(f"held-out implicit reward margin — before (sft_model): {margin_before:.3f}, after (dpo_policy): {margin_after:.3f}")
+assert abs(margin_before) < 1e-3, "margin computed against the reference itself should be ~0 (sanity check)"
+assert margin_after > margin_before, "DPO did not increase the implicit reward margin on held-out pairs"
+print("TEST 3 PASSED — DPO loss decreased and held-out implicit reward margin increased")
+"""))
+
+cells.append(md("""
+### Question 2
+
+`margin_before` is computed by comparing `sft_model` against `ref_model` — but `ref_model`
+*is* a copy of `sft_model`'s weights (Part 2's setup cell). Why does `TEST 3` assert this
+margin is approximately zero rather than exactly zero, and why is checking it at all a
+useful sanity check on `dpo_reward_margin` itself, independent of whether DPO training
+worked?
+
+*Write your answer below:*
+
+"""))
+
+cells.append(code("""
+ckpt_path = f"{CKPT_DIR}/dpo_model.pt"
+torch.save({'model_state_dict': dpo_policy.state_dict(), 'config': sft_cfg}, ckpt_path)
+print(f"Saved DPO checkpoint to {ckpt_path}")
+"""))
+
+# Part 3 is appended here.
 
 # ─── WRITE ───────────────────────────────────────────────────────────────────
 nb['cells'] = cells
