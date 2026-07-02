@@ -49,6 +49,7 @@ re-derived here.</em></p>
   <a href="#s5">5. Reward Modeling</a>
   <a href="#s6">6. PPO / RLHF</a>
   <a href="#s7">7. DPO</a>
+  <a href="#s8">8. Evaluation</a>
 </nav>
 
 <!-- ============================================================ -->
@@ -649,6 +650,78 @@ progressively less representative of what the current policy would actually gene
   same underlying objective.</li>
   <li>PPO's online rollouts can still be preferable when the policy needs to explore beyond
   what a fixed, pre-collected preference dataset covers.</li>
+</ul>
+</div>
+<!-- ============================================================ -->
+<h2 id="s8">8. Evaluation</h2>
+
+<p>Every alignment stage so far (Sections 5-7) has produced a policy that scores well
+against <em>its own</em> training signal — the reward model, or the implicit reward
+DPO derives from the preference pairs. Neither is a disinterested judge: both were fit
+from the same finite, sentiment-classifier-derived data. Evaluation asks a different
+question, using a signal the policies were never directly optimized against: does an
+independent judge actually prefer the aligned models' outputs?</p>
+
+<h3>LLM-as-Judge Pairwise Comparison</h3>
+
+<p>Rather than asking a judge model to assign an absolute quality score to a single
+completion (numerically unstable, poorly calibrated across a judge's own quirks),
+pairwise comparison asks the strictly easier question "which of these two completions is
+better?" — the same relative-judgment structure Bradley-Terry (Section 5) is built to
+consume, but with a language model standing in for the reward model, evaluated after
+training rather than used to shape it.</p>
+
+<div class="definition">
+<strong>Position bias.</strong> LLM judges are empirically biased toward whichever
+completion is shown <em>first</em> in the prompt, independent of actual quality (Zheng et
+al. 2023, "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena", document this
+directly). The standard mitigation — used here — is to present every pair to the judge
+<strong>twice</strong>, once in each order, and only count a confident win if the judge
+picks the <em>same</em> completion regardless of position. If the judge flips its answer
+depending on order, that comparison contributes no reliable preference signal and is
+treated as a tie/discard rather than counted toward either model's win-rate.</div>
+
+<h3>Verbosity Bias</h3>
+
+<p>A second well-documented judge bias: LLM judges tend to rate longer completions more
+favorably, independent of whether the additional length reflects additional genuine
+quality (Zheng et al. 2023 again; also Dubois et al. 2024, "Length-Controlled AlpacaEval").
+This pipeline's judge prompt does not explicitly control for length, so any win-rate
+difference should be read alongside the completions' actual lengths — a model that reliably
+produces longer completions could show an inflated win-rate for reasons unrelated to story
+quality.</p>
+
+<h3>The Reward-vs-KL Overoptimization Curve</h3>
+
+<p>Separately from judge-based win-rates, Part 3's PPO run logged the reward model's mean
+score and the mean KL divergence from the reference policy at every training step. Plotting
+one against the other directly visualizes the trade-off underlying the entire KL-constrained
+objective (Section 6): as training progresses, KL grows (the policy moves away from
+\(\pi_{ref}\)) and, if the reward model is a reasonably faithful proxy over the region the
+policy has explored so far, reward grows with it.</p>
+
+<div class="theorem">
+<strong>Goodhart's Law</strong> ("when a measure becomes a target, it ceases to be a good
+measure") is the general principle underlying reward-model overoptimization (Gao, Schulman
+&amp; Hilton, 2022; see Q&amp;A 14 for the full empirical picture). Applied here: the
+sentiment-classifier-derived reward model is a proxy for "good story", not identical to
+it. Optimizing the proxy hard and long enough eventually finds outputs that score highly on
+the proxy without being better stories — this is exactly what a reward-vs-KL curve that
+keeps climbing while qualitative generations degrade would show.</div>
+
+<div class="keyfacts">
+<strong>Key Facts — Section 8</strong>
+<ul>
+  <li>Pairwise LLM-as-judge comparison reuses Bradley-Terry's relative-judgment structure,
+  but with an independent judge model, applied only after training (not used to shape a
+  reward signal).</li>
+  <li>Position bias is controlled by presenting every pair in both orderings and discarding
+  comparisons where the judge's answer flips.</li>
+  <li>Verbosity bias means win-rate differences should be read alongside completion length,
+  not treated as a pure quality signal in isolation.</li>
+  <li>A reward-vs-KL curve visualizes the same overoptimization risk as Goodhart's law —
+  a proxy reward that keeps climbing while true quality plateaus or degrades is the
+  signature of an over-optimized policy.</li>
 </ul>
 </div>
 
