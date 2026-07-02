@@ -379,5 +379,69 @@ since no separate gold-standard judge is used in this pipeline):
 
 ---
 
-*(Sections for DPO, evaluation, and RLVR/GRPO are appended here as the
+## 15. The DPO derivation, restated as a single chain of substitutions
+
+The full chain, compressed to its essential steps (the HTML reference has the
+complete algebra):
+
+1. **Start:** the KL-constrained RL objective,
+   `max_pi E[r(x,y)] - beta*KL(pi || pi_ref)`, is the *same* objective PPO
+   optimizes — DPO doesn't change what's being optimized, only how.
+2. **Closed form:** for any *fixed* reward `r`, this objective's unique
+   maximizer is `pi*(y|x) = pi_ref(y|x) * exp(r(x,y)/beta) / Z(x)`, where
+   `Z(x)` is an intractable per-prompt normalizer. This is a general fact
+   about KL-regularized objectives (it's the same form as a Boltzmann/Gibbs
+   distribution reweighting a prior by an exponentiated energy — here the
+   "energy" is the reward, "temperature" is `beta`, and the "prior" is
+   `pi_ref`).
+3. **Invert:** solve the closed form for `r` in terms of `pi*`:
+   `r(x,y) = beta*log(pi*(y|x)/pi_ref(y|x)) + beta*log Z(x)`. This says any
+   reward function is recoverable (up to the `Z(x)` constant) from its own
+   optimal policy — the paper's "secretly a reward model" framing.
+4. **Substitute into Bradley-Terry:** plug this expression for `r` into
+   `-log sigmoid(r(x,y_w) - r(x,y_l))`. The `beta*log Z(x)` term is identical
+   for `y_w` and `y_l` (same prompt `x`) and cancels in the subtraction —
+   this is the crux of why the loss becomes computable without ever touching
+   `Z(x)`.
+5. **Relabel:** replace the (unknown, only-hypothetical) optimal `pi*` with a
+   directly-parameterized, directly-trained `pi_theta`. The result is
+   `dpo_loss` in `src/llm_pipeline/rlhf.py` — a function of only
+   `log pi_theta` and `log pi_ref` evaluated on the observed preference pairs,
+   no reward model or sampling required anywhere in the chain.
+
+The practical payoff of steps 2-4: an RL objective (needing rollouts,
+exploration, a value function to reduce variance) has been converted into a
+supervised classification loss over a fixed dataset — as easy to optimize as
+the reward model's Bradley-Terry loss itself, except it trains the *policy*
+directly instead of a separate scoring function.
+
+---
+
+## 16. Why does `beta` do the same job in DPO as in PPO — precedent and practical tuning
+
+Both PPO's `-beta*KL(pi||pi_ref)` penalty term and DPO's `beta` inside the
+sigmoid trace back to the *same* objective (Q&A 15, step 1) — this isn't two
+different hyperparameters that happen to share a name, it's the same
+regularization strength appearing in two different optimization procedures
+for the same underlying problem. Rafailov et al. 2023 report DPO is markedly
+less sensitive to `beta` than PPO is to its equivalent KL coefficient, because
+DPO's loss landscape doesn't have PPO's additional sources of instability
+(value function miscalibration, advantage estimation variance, importance-
+sampling ratio blowup) layered on top of the KL trade-off — `beta` is the
+*only* knob controlling how far the policy is allowed to move, rather than one
+of several interacting ones.
+
+Practical tuning intuition (used to pick this pipeline's `beta=0.1`, a
+commonly-cited DPO default): too small and the model can drive the sigmoid's
+argument arbitrarily large for any pair, in principle allowing the policy to
+memorize the specific chosen/rejected pairs in the training set rather than
+learning a generalizable preference direction (an overfitting risk analogous
+to reward-model overoptimization in Q&A 14, but manifesting as memorization
+of the fixed preference dataset instead of exploitation of a live queryable
+reward model); too large and gradient updates become too small to shift the
+policy's output distribution in the number of steps this pipeline trains for.
+
+---
+
+*(Sections for evaluation and RLVR/GRPO are appended here as the
 corresponding notebooks are built.)*
