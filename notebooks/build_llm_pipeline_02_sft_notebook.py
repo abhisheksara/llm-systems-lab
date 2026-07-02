@@ -225,7 +225,127 @@ whole prompt to generate the response?
 
 """))
 
-# Part 3 is appended here.
+# ─── PART 3: SFT TRAINING LOOP ───────────────────────────────────────────────
+cells.append(md("""
+---
+## Part 3: SFT Training Loop
+
+Fine-tunes a fresh copy of the base model for 400 steps (batch size 32) with
+AdamW at a fixed LR of `3e-5` — roughly 10x below pretraining's peak LR (see
+`docs/llm_training_pipeline_reference.html#s4` for the forgetting rationale).
+No warmup/cosine schedule is used here: SFT runs few enough steps that a
+constant low LR is simpler and sufficient. On an RTX 3070 this takes under a
+minute.
+"""))
+
+cells.append(code("""
+import copy
+sft_model = copy.deepcopy(base_model).to(device)
+
+held_out = sft_pairs[-200:]
+train_pairs = sft_pairs[:-200]
+print(f"{len(train_pairs)} training pairs, {len(held_out)} held-out pairs")
+
+def make_batch(pairs, batch_size):
+    idx = torch.randint(0, len(pairs), (batch_size,))
+    batch = [tokenize_sft_example(pairs[i][0], pairs[i][1], tokenizer, EOT_ID, BLOCK_SIZE) for i in idx]
+    input_ids = torch.stack([b[0] for b in batch]).to(device)
+    labels = torch.stack([b[1] for b in batch]).to(device)
+    return input_ids, labels
+"""))
+
+cells.append(code("""
+max_steps = 400
+lr = 3e-5
+batch_size = 32
+
+opt = torch.optim.AdamW(sft_model.parameters(), lr=lr)
+losses = []
+t0 = time.time()
+for step in range(max_steps):
+    input_ids, labels = make_batch(train_pairs, batch_size)
+    logits, loss = sft_model(input_ids, labels)
+    opt.zero_grad()
+    loss.backward()
+    torch.nn.utils.clip_grad_norm_(sft_model.parameters(), 1.0)
+    opt.step()
+    losses.append(loss.item())
+    if step % 50 == 0 or step == max_steps - 1:
+        print(f"step {step:4d} | loss {loss.item():.3f} | elapsed {time.time()-t0:.0f}s")
+
+print(f"SFT training elapsed: {time.time()-t0:.1f}s")
+"""))
+
+cells.append(code("""
+plt.figure(figsize=(8, 4))
+plt.plot(losses, alpha=0.6, label="per-step SFT loss (response tokens only)")
+window = 20
+smoothed = [sum(losses[max(0,i-window):i+1]) / len(losses[max(0,i-window):i+1]) for i in range(len(losses))]
+plt.plot(smoothed, label=f"{window}-step moving average", linewidth=2)
+plt.xlabel("step"); plt.ylabel("masked cross-entropy loss"); plt.title("SFT loss curve")
+plt.legend(); plt.tight_layout(); plt.show()
+"""))
+
+cells.append(code("""
+# TEST 3: SFT loss decreased, and held-out perplexity improves over the base model
+@torch.no_grad()
+def held_out_avg_loss(model, pairs):
+    model.eval()
+    total = 0.0
+    for topic, story in pairs:
+        input_ids, labels = tokenize_sft_example(topic, story, tokenizer, EOT_ID, BLOCK_SIZE)
+        _, loss = model(input_ids.unsqueeze(0).to(device), labels.unsqueeze(0).to(device))
+        total += loss.item()
+    return total / len(pairs)
+
+first_20_avg = sum(losses[:20]) / 20
+last_20_avg = sum(losses[-20:]) / 20
+print(f"first-20-step avg loss: {first_20_avg:.3f}, last-20-step avg loss: {last_20_avg:.3f}")
+assert last_20_avg < first_20_avg, "SFT loss did not decrease over training"
+
+base_held_out_loss = held_out_avg_loss(base_model, held_out)
+sft_held_out_loss = held_out_avg_loss(sft_model, held_out)
+print(f"held-out masked loss — base: {base_held_out_loss:.3f} (PPL {math.exp(base_held_out_loss):.1f}), "
+      f"sft: {sft_held_out_loss:.3f} (PPL {math.exp(sft_held_out_loss):.1f})")
+assert sft_held_out_loss < base_held_out_loss, "SFT model did not improve held-out response-token perplexity"
+print("TEST 3 PASSED — SFT loss decreased and held-out perplexity improved over base")
+"""))
+
+cells.append(code("""
+# Qualitative comparison: base vs SFT completions on held-out topics
+sft_model.eval()
+for topic in ["dragon", "picnic", "robot"]:
+    prompt = format_sft_prompt(topic)
+    prompt_ids = torch.tensor([tokenizer.encode(prompt).ids], device=device)
+    base_out = base_model.generate(prompt_ids, max_new_tokens=40, temperature=0.8, top_k=40)
+    sft_out = sft_model.generate(prompt_ids, max_new_tokens=40, temperature=0.8, top_k=40)
+    print(f"=== topic: {topic} ===")
+    print("BASE:", tokenizer.decode(base_out[0].tolist()))
+    print("SFT :", tokenizer.decode(sft_out[0].tolist()))
+    print()
+"""))
+
+cells.append(md("""
+### Question 3
+
+Compare the BASE and SFT completions above. The base model was never trained
+on the `"Write a short story about {topic}:\\n"` template at all — it will
+either ignore the instruction and continue it as generic text, or coincidentally
+produce something topical because TinyStories already contains that vocabulary.
+Look specifically at whether the SFT model's response is more consistently
+*about* the stated topic than the base model's. Does the held-out perplexity
+number from TEST 3 alone tell you this, or did you need to read the actual
+generations to know?
+
+*Write your answer below:*
+
+"""))
+
+cells.append(code("""
+ckpt_path = f"{CKPT_DIR}/sft_model.pt"
+torch.save({'model_state_dict': sft_model.state_dict(), 'config': base_cfg}, ckpt_path)
+print(f"Saved SFT checkpoint to {ckpt_path}")
+"""))
 
 # ─── WRITE ───────────────────────────────────────────────────────────────────
 nb['cells'] = cells
