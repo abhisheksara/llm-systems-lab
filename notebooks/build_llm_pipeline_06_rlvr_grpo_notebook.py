@@ -258,7 +258,141 @@ task or the group size `G`) would you expect that trade-off to look worse?
 
 """))
 
-# Part 3 is appended here.
+# ─── PART 3: GRPO TRAINING LOOP ──────────────────────────────────────────────
+cells.append(md("""
+---
+## Part 3: GRPO Training Loop
+
+For each step: pick one story prefix + target word, sample a group of 6 completions,
+score each with `verifiable_reward`, compute group-relative advantage, then take a few
+clipped-objective gradient steps (reusing `ppo_clipped_loss`) plus an explicit KL penalty
+term against a frozen reference — unlike PPO, the KL here is added directly to the loss
+rather than folded into the per-token reward, since there is no per-token reward
+decomposition without a value function to consume it.
+"""))
+
+cells.append(code("""
+grpo_policy = copy.deepcopy(sft_model).to(device)
+ref_model = copy.deepcopy(sft_model).to(device)
+for p in ref_model.parameters():
+    p.requires_grad_(False)
+ref_model.eval()
+print(f"GRPO policy params: {sum(p.numel() for p in grpo_policy.parameters()):,} (no value head)")
+"""))
+
+cells.append(code("""
+group_size = 6
+grpo_steps = 150
+max_new_tokens = 30
+token_budget = 30
+clip_eps = 0.2
+kl_beta = 0.05
+lr = 2e-4
+grpo_epochs = 2
+
+opt = torch.optim.AdamW(grpo_policy.parameters(), lr=lr)
+pass_rates = []
+t0 = time.time()
+for step in range(grpo_steps):
+    story = grpo_story_pool[torch.randint(0, len(grpo_story_pool), (1,)).item()]
+    prompt, target_word = sample_grpo_prompt(story, tokenizer)
+    prompt_ids = torch.tensor([tokenizer.encode(prompt).ids], device=device)
+    prompt_len = prompt_ids.shape[1]
+
+    idx, old_logprobs, ref_logprobs = generate_group_rollout(
+        grpo_policy, ref_model, prompt_ids, group_size, max_new_tokens,
+        temperature=1.0, top_k=40, block_size=BLOCK_SIZE,
+    )
+    completions = [tokenizer.decode(idx[i, prompt_len:].tolist()) for i in range(group_size)]
+    rewards = torch.tensor(
+        [[verifiable_reward(c, target_word, token_budget, tokenizer) for c in completions]],
+        device=device,
+    )
+    advantages = compute_group_relative_advantage(rewards).squeeze(0)          # (group_size,)
+    advantages = advantages.unsqueeze(1).expand(-1, max_new_tokens)            # broadcast per-token
+
+    for _ in range(grpo_epochs):
+        new_logprobs = evaluate_actions_no_value(grpo_policy, idx, prompt_len, max_new_tokens)
+        policy_loss = ppo_clipped_loss(new_logprobs, old_logprobs, advantages, clip_eps)
+        # k3 KL estimator (Schulman, "Approximating KL Divergence"): exp(logratio) - logratio - 1
+        # is >= 0 with a zero at logratio=0, so it pulls the policy back toward the reference.
+        # The naive linear form (new_logprobs - ref_logprobs).mean() has no such restoring force —
+        # its gradient uniformly suppresses whatever token was sampled every step regardless of
+        # the actual policy/reference gap, which empirically collapses the policy to gibberish
+        # within ~10-20 steps here. This is the same estimator used by TRL's GRPOTrainer.
+        log_ratio = ref_logprobs - new_logprobs
+        kl_penalty = (torch.exp(log_ratio) - log_ratio - 1).mean()
+        loss = policy_loss + kl_beta * kl_penalty
+        opt.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(grpo_policy.parameters(), 1.0)
+        opt.step()
+
+    pass_rate = rewards.mean().item()
+    pass_rates.append(pass_rate)
+    if step % 15 == 0 or step == grpo_steps - 1:
+        print(f"step {step:4d} | group pass-rate {pass_rate:.2f} | target={target_word!r} | elapsed {time.time()-t0:.0f}s")
+
+print(f"GRPO training elapsed: {time.time()-t0:.1f}s")
+"""))
+
+cells.append(code("""
+plt.figure(figsize=(8, 4))
+plt.plot(pass_rates, alpha=0.5, label="per-step group pass-rate")
+window = 20
+smoothed = [sum(pass_rates[max(0,i-window):i+1]) / len(pass_rates[max(0,i-window):i+1]) for i in range(len(pass_rates))]
+plt.plot(smoothed, label=f"{window}-step moving average", linewidth=2)
+plt.xlabel("GRPO step"); plt.ylabel("fraction of group satisfying the verifiable reward")
+plt.title("GRPO pass-rate over training")
+plt.legend(); plt.tight_layout(); plt.show()
+"""))
+
+cells.append(code("""
+# TEST 5: pass-rate improves over training
+first_20 = sum(pass_rates[:20]) / 20
+last_20 = sum(pass_rates[-20:]) / 20
+print(f"first-20-step avg pass-rate: {first_20:.3f}, last-20-step avg pass-rate: {last_20:.3f}")
+assert last_20 > first_20, "GRPO pass-rate did not improve over training"
+print("TEST 5 PASSED — GRPO pass-rate improved over training")
+"""))
+
+cells.append(code("""
+# Qualitative check: sample a few post-training completions and inspect them directly
+grpo_policy.eval()
+for _ in range(3):
+    story = grpo_story_pool[torch.randint(0, len(grpo_story_pool), (1,)).item()]
+    prompt, target_word = sample_grpo_prompt(story, tokenizer)
+    prompt_ids = torch.tensor([tokenizer.encode(prompt).ids], device=device)
+    with torch.no_grad():
+        out = grpo_policy.generate(prompt_ids, max_new_tokens=max_new_tokens, temperature=0.7, top_k=40)
+    completion = tokenizer.decode(out[0, prompt_ids.shape[1]:].tolist())
+    r = verifiable_reward(completion, target_word, token_budget, tokenizer)
+    print(f"target word: {target_word!r} | reward: {r}")
+    print("prompt:", prompt)
+    print("completion:", completion)
+    print()
+grpo_policy.train()
+"""))
+
+cells.append(md("""
+### Question 3
+
+Look at the qualitative completions just printed, specifically wherever the target word
+appears in the text. Does it read as a natural part of the continuation, or does it look
+like it was inserted mechanically just to satisfy the reward check (Q&A 19's specification-
+gaming concern)? Does the numeric pass-rate curve from TEST 5 alone tell you which of these
+happened, or did you need to read the actual text to know — and how does this compare to
+Notebook 2 Question 3's SFT-vs-base comparison, which asked the same kind of question?
+
+*Write your answer below:*
+
+"""))
+
+cells.append(code("""
+ckpt_path = f"{CKPT_DIR}/grpo_model.pt"
+torch.save({'model_state_dict': grpo_policy.state_dict(), 'config': sft_cfg}, ckpt_path)
+print(f"Saved GRPO checkpoint to {ckpt_path}")
+"""))
 
 # ─── WRITE ───────────────────────────────────────────────────────────────────
 nb['cells'] = cells
