@@ -182,3 +182,13 @@ def dpo_loss(policy_chosen_lp, policy_rejected_lp, ref_chosen_lp, ref_rejected_l
     ref_logratios = ref_chosen_lp - ref_rejected_lp
     logits = beta * (pi_logratios - ref_logratios)
     return -F.logsigmoid(logits).mean()
+
+
+def compute_group_relative_advantage(rewards):
+    """rewards: (B, G) — B prompts, G completions per prompt (one group per row).
+    Returns advantages of the same shape: each completion's reward normalized by
+    its own group's mean and std. No value function or baseline network needed —
+    this is GRPO's replacement for GAE + a learned value function."""
+    mean = rewards.mean(dim=1, keepdim=True)
+    std = rewards.std(dim=1, keepdim=True)
+    return (rewards - mean) / (std + 1e-4)
