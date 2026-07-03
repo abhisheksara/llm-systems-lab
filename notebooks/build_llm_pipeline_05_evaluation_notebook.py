@@ -290,6 +290,25 @@ ax.legend()
 plt.tight_layout(); plt.show()
 """))
 
+cells.append(code("""
+# A sanity flag, not a test: three *independent* pairwise comparisons landing on the exact
+# same split (with zero ties in all 30 judged prompts combined) is a pattern worth being
+# skeptical of, not just accepting because TEST 2 passed — TEST 2 only checks the numbers
+# are well-formed, not that they mean what they appear to mean. Given TEST 1 already found
+# this judge's bias-correction gets the wrong sign on roughly half of tested pairs, an
+# unusually *clean*, identical result across unrelated comparisons is at least as suspicious
+# as a noisy one would be.
+results = {"PPO vs SFT": sft_vs_ppo, "DPO vs SFT": sft_vs_dpo, "PPO vs DPO": ppo_vs_dpo}
+if len({tuple(round(x, 3) for x in v) for v in results.values()}) == 1:
+    print("Flag: all three comparisons produced the IDENTICAL win/tie split "
+          f"({next(iter(results.values()))}) despite comparing three different model pairs "
+          "with freshly-sampled generations each time. Given Question 1's finding that this "
+          "judge's position-bias correction is unreliable, this is plausibly a residual "
+          "artifact (e.g. a bias favoring whichever model was RLHF-trained, independent of "
+          "actual content) rather than three genuinely-converging quality judgments — see "
+          "Question 2.")
+"""))
+
 cells.append(md("""
 ### Question 2
 
@@ -299,12 +318,14 @@ mentioned during training in any form. Is this a genuinely held-out evaluation, 
 be overstating how well these models would generalize to a truly novel topic? What would a
 stricter held-out set look like for this pipeline?
 
-Separately: if PPO's win-rate above did *not* exceed SFT's, is that surprising given
-Notebook 3's reward model score rose throughout PPO training (its own TEST 7 passed), and
-given Notebook 4 already showed PPO's completions can be repetitive/lower-coherence than
-SFT's? What does it tell you that an independent judge and a completely separate oracle
-sentiment scorer can agree a *learned reward model's own training curve* going up doesn't
-guarantee the resulting policy is actually better?
+Separately: Notebook 4 found PPO's checkpoint reward-hacked into repetitive, lower-coherence
+text that scored *below* SFT on an oracle sentiment classifier — yet the judge-based
+win-rates above may show PPO beating SFT anyway (check the actual printed numbers, and
+whether the "identical split" flag above fired). If so, what does it tell you that an
+independent LLM judge and a completely separate oracle sentiment scorer can *disagree* about
+which policy is better, especially given Question 1 already found this specific judge's
+position-bias correction doesn't reliably work? Which of the two signals — the judge's
+win-rate or Notebook 4's sentiment comparison — would you trust more here, and why?
 
 *Write your answer below:*
 
