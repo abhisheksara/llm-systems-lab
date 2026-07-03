@@ -307,9 +307,14 @@ differently:
   compute budget, since it only reuses information within one prompt's group
   of `G` samples rather than across the whole training history. This is
   exactly why GRPO needs `G` completions *per prompt* (this pipeline uses
-  `G=6`) rather than one — a group of size 1 would give a baseline of
+  `G=10`) rather than one — a group of size 1 would give a baseline of
   `(r_1 - r_1) / (0 + eps) = 0`, discarding the reward's information
-  entirely.
+  entirely. Even `G=10` turns out not to be large enough to make this
+  pipeline's binary, single-word reward reliably learnable within 150-200
+  steps at this model's scale (see Notebook 6's own TEST 5 discussion) — a
+  concrete illustration that the group-size/reward-sparsity trade-off this
+  section describes in the abstract has real teeth in practice, not just in
+  theory.
 
 The practical trade favors GRPO specifically when generating extra
 completions is cheap relative to training and maintaining a value function —
