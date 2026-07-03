@@ -505,5 +505,65 @@ really improve" question.
 
 ---
 
-*(Sections for RLVR/GRPO are appended here as the corresponding notebook is
-built.)*
+## 18. Group-relative advantage as a Monte-Carlo baseline — why it's unbiased-in-expectation but higher-variance than a learned value function
+
+A value function `V(s)` trained to convergence estimates `E[return | s]` — the
+*true* conditional expectation, using however many training examples were
+needed to fit it well. A group of `G` sampled completions' mean reward is
+also an estimate of `E[reward | prompt]`, but from only `G` samples, computed
+fresh at every training step from whatever the *current* policy happens to
+produce. Both are valid baselines (subtracting *any* baseline that doesn't
+depend on the sampled action leaves the policy gradient's expectation
+unbiased — this is a standard result in the policy-gradient literature,
+sometimes called the baseline-independence property), but they trade off
+differently:
+
+- **Learned value function (PPO):** amortizes information across the whole
+  training run — once trained, it's a cheap, low-variance estimate reusable
+  across many states. Costs: extra parameters, a separate loss to balance
+  against the policy loss, and can be *biased* if it hasn't converged
+  (especially early in training, or if the reward distribution shifts as the
+  policy improves).
+- **Group-relative baseline (GRPO):** unbiased by construction for *this*
+  step's policy (it's the sample mean of *this* step's own rollouts, not a
+  function that might have gone stale), but higher-variance for a fixed
+  compute budget, since it only reuses information within one prompt's group
+  of `G` samples rather than across the whole training history. This is
+  exactly why GRPO needs `G` completions *per prompt* (this pipeline uses
+  `G=6`) rather than one — a group of size 1 would give a baseline of
+  `(r_1 - r_1) / (0 + eps) = 0`, discarding the reward's information
+  entirely.
+
+The practical trade favors GRPO specifically when generating extra
+completions is cheap relative to training and maintaining a value function —
+true here (and in DeepSeekMath/DeepSeek-R1's setting) because the reward is a
+fast, rule-based check rather than a reward-model forward pass or, worse, a
+human label.
+
+---
+
+## 19. Reward hacking without a learned reward model — what can still go wrong
+
+Section 9 notes RLVR removes the risk of exploiting a *learned* reward
+model's blind spots, but this doesn't make the reward immune to gaming — it
+only changes what kind of gaming is possible. A rule-based reward is only as
+good as the rule's specification, and a sufficiently-optimized policy will
+find any gap between "satisfies the literal rule" and "does the thing the
+rule was meant to check for" (the general pattern is sometimes called
+**specification gaming**; Krakovna et al.'s 2020 "Specification gaming: the
+flip side of AI ingenuity" catalogs many concrete examples across RL
+generally, not specific to LLMs).
+
+Concretely, for this pipeline's `verifiable_reward` (contains the target word
+AND stays under the token budget): a policy could learn to satisfy the rule
+in degenerate ways the rule doesn't rule out — e.g. appending the target word
+as a non-sequitur at the very end of an otherwise-unrelated or truncated
+continuation, purely to trigger the substring check, rather than genuinely
+incorporating it into a coherent story ending. The token-budget half of the
+reward is comparatively hard to game (it's a simple length check with no
+semantic gap to exploit), but the target-word-inclusion half has exactly this
+kind of specification gap. This is why Question 2 in Notebook 6 asks you to
+actually read the trained policy's completions, not just trust the numeric
+pass-rate curve — the same "read the actual generations, not just the
+metric" discipline that Notebook 2's Question 3 and Notebook 3's Question 4
+already established.
