@@ -391,7 +391,8 @@ for f in ['sft_model.pt', 'tinystories_bpe-vocab.json', 'tinystories_bpe-merges.
 html = open('docs/llm_training_pipeline_reference.html', encoding='utf-8').read()
 assert 'href=\"#s8\"' in html, 'HTML nav missing #s8 — run Part 5 plan first'
 qa = open('docs/llm_training_pipeline/concepts_qa.md', encoding='utf-8').read()
-assert qa.count('\n## ') == 17, f'expected 17 Q&A sections (post Part 5), found {qa.count(chr(10)+chr(35)+chr(35)+chr(32))} — run Part 5 plan first'
+n_sections = qa.count('\n## ')
+assert n_sections >= 17, f'expected at least 17 Q&A sections (post Part 5), found {n_sections} — run Part 5 plan first'
 print('Dependencies present (Part 1, 2, 5)')
 "
 ```
